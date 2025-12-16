@@ -236,7 +236,7 @@ struct CreateLayoutFlowView: View {
         Form {
             // Total desks - "the law"
             Section(header: Text("Total Desks")) {
-                Stepper("Number of Desks: \(config.totalDesks)", value: $config.totalDesks, in: 1...100)
+                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...100)
                 Text("This is the maximum number of desks that will be created")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -274,8 +274,8 @@ struct CreateLayoutFlowView: View {
         switch template {
         case .traditionalRows:
             Section(header: Text("Grid Layout")) {
-                Stepper("Rows: \(config.rows)", value: $config.rows, in: 1...15)
-                Stepper("Columns: \(config.columns)", value: $config.columns, in: 1...15)
+                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...15)
+                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...15)
                 Text("Grid capacity: \(config.rows * config.columns) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -283,8 +283,8 @@ struct CreateLayoutFlowView: View {
 
         case .pairs:
             Section(header: Text("Pairs Layout")) {
-                Stepper("Pair Columns: \(config.pairColumns)", value: $config.pairColumns, in: 1...10)
-                Stepper("Rows of Pairs: \(config.pairRows)", value: $config.pairRows, in: 1...10)
+                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...10)
+                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...10)
                 Text("Capacity: \(config.pairColumns * config.pairRows * 2) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -292,8 +292,8 @@ struct CreateLayoutFlowView: View {
 
         case .groups:
             Section(header: Text("Group Layout")) {
-                Stepper("Number of Groups: \(config.numberOfGroups)", value: $config.numberOfGroups, in: 1...20)
-                Stepper("Desks per Group: \(config.desksPerGroup)", value: $config.desksPerGroup, in: 2...8)
+                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...20)
+                NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...8)
                 Text("Capacity: \(config.numberOfGroups * config.desksPerGroup) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -301,8 +301,8 @@ struct CreateLayoutFlowView: View {
 
         case .uShape:
             Section(header: Text("U-Shape Layout")) {
-                Stepper("Top Seats: \(config.uShapeTopCount)", value: $config.uShapeTopCount, in: 3...15)
-                Stepper("Side Seats (each): \(config.uShapeSideCount)", value: $config.uShapeSideCount, in: 1...10)
+                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 3...15)
+                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...10)
                 Text("Capacity: \(config.uShapeTotalSeats) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -310,8 +310,8 @@ struct CreateLayoutFlowView: View {
 
         case .labStations:
             Section(header: Text("Lab Stations")) {
-                Stepper("Number of Stations: \(config.numberOfStations)", value: $config.numberOfStations, in: 1...12)
-                Stepper("Seats per Station: \(config.seatsPerStation)", value: $config.seatsPerStation, in: 2...8)
+                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...12)
+                NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...8)
                 Text("Each station is a round table")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -319,8 +319,8 @@ struct CreateLayoutFlowView: View {
 
         case .choirLoft:
             Section(header: Text("Choir Loft Layout")) {
-                Stepper("Rows: \(config.choirRows)", value: $config.choirRows, in: 2...10)
-                Stepper("Columns: \(config.choirColumns)", value: $config.choirColumns, in: 3...15)
+                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 2...10)
+                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 3...15)
                 Text("Seats are staggered in alternating rows")
                     .font(.caption)
                     .foregroundColor(.blue)
@@ -658,7 +658,7 @@ struct EditLayoutFlowView: View {
     private var configurationStepView: some View {
         Form {
             Section(header: Text("Total Desks")) {
-                Stepper("Number of Desks: \(config.totalDesks)", value: $config.totalDesks, in: 1...100)
+                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...100)
                 Text("This is the maximum number of desks that will be created")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -694,38 +694,38 @@ struct EditLayoutFlowView: View {
         switch template {
         case .traditionalRows:
             Section(header: Text("Grid Layout")) {
-                Stepper("Rows: \(config.rows)", value: $config.rows, in: 1...15)
-                Stepper("Columns: \(config.columns)", value: $config.columns, in: 1...15)
+                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...15)
+                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...15)
             }
 
         case .pairs:
             Section(header: Text("Pairs Layout")) {
-                Stepper("Pair Columns: \(config.pairColumns)", value: $config.pairColumns, in: 1...10)
-                Stepper("Rows of Pairs: \(config.pairRows)", value: $config.pairRows, in: 1...10)
+                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...10)
+                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...10)
             }
 
         case .groups:
             Section(header: Text("Group Layout")) {
-                Stepper("Number of Groups: \(config.numberOfGroups)", value: $config.numberOfGroups, in: 1...20)
-                Stepper("Desks per Group: \(config.desksPerGroup)", value: $config.desksPerGroup, in: 2...8)
+                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...20)
+                NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...8)
             }
 
         case .uShape:
             Section(header: Text("U-Shape Layout")) {
-                Stepper("Top Seats: \(config.uShapeTopCount)", value: $config.uShapeTopCount, in: 3...15)
-                Stepper("Side Seats (each): \(config.uShapeSideCount)", value: $config.uShapeSideCount, in: 1...10)
+                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 3...15)
+                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...10)
             }
 
         case .labStations:
             Section(header: Text("Lab Stations")) {
-                Stepper("Number of Stations: \(config.numberOfStations)", value: $config.numberOfStations, in: 1...12)
-                Stepper("Seats per Station: \(config.seatsPerStation)", value: $config.seatsPerStation, in: 2...8)
+                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...12)
+                NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...8)
             }
 
         case .choirLoft:
             Section(header: Text("Choir Loft Layout")) {
-                Stepper("Rows: \(config.choirRows)", value: $config.choirRows, in: 2...10)
-                Stepper("Columns: \(config.choirColumns)", value: $config.choirColumns, in: 3...15)
+                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 2...10)
+                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 3...15)
             }
 
         case .empty:
