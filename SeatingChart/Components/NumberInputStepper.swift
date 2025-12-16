@@ -3,6 +3,7 @@
 //  SeatingChart
 //
 //  A stepper that allows both tapping to type a value and using +/- buttons
+//  Long-press on +/- buttons to increment faster
 //
 
 import SwiftUI
@@ -14,6 +15,8 @@ struct NumberInputStepper: View {
 
     @State private var textValue: String = ""
     @FocusState private var isTextFieldFocused: Bool
+    @State private var timer: Timer?
+    @State private var isLongPressing = false
 
     var body: some View {
         HStack {
@@ -22,27 +25,30 @@ struct NumberInputStepper: View {
             Spacer()
 
             HStack(spacing: 0) {
-                // Minus button
-                Button {
-                    if value > range.lowerBound {
-                        value -= 1
-                        textValue = "\(value)"
+                // Minus button with long-press support
+                Image(systemName: "minus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(value <= range.lowerBound ? .gray : .blue)
+                    .frame(width: 44, height: 44)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(8, corners: [.topLeft, .bottomLeft])
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        decrementValue(by: 1)
                     }
-                } label: {
-                    Image(systemName: "minus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(value <= range.lowerBound ? .gray : .blue)
-                        .frame(width: 36, height: 36)
-                        .background(Color(.systemGray5))
-                        .cornerRadius(8, corners: [.topLeft, .bottomLeft])
-                }
-                .disabled(value <= range.lowerBound)
+                    .onLongPressGesture(minimumDuration: 0.3, pressing: { pressing in
+                        if pressing {
+                            startDecrementing()
+                        } else {
+                            stopTimer()
+                        }
+                    }, perform: {})
 
-                // Editable text field
+                // Editable text field - wider to fit larger numbers
                 TextField("", text: $textValue)
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.center)
-                    .frame(width: 50, height: 36)
+                    .frame(width: 70, height: 44)
                     .background(Color(.systemGray6))
                     .focused($isTextFieldFocused)
                     .onChange(of: textValue) { _, newValue in
@@ -61,21 +67,24 @@ struct NumberInputStepper: View {
                         }
                     }
 
-                // Plus button
-                Button {
-                    if value < range.upperBound {
-                        value += 1
-                        textValue = "\(value)"
+                // Plus button with long-press support
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(value >= range.upperBound ? .gray : .blue)
+                    .frame(width: 44, height: 44)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(8, corners: [.topRight, .bottomRight])
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        incrementValue(by: 1)
                     }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(value >= range.upperBound ? .gray : .blue)
-                        .frame(width: 36, height: 36)
-                        .background(Color(.systemGray5))
-                        .cornerRadius(8, corners: [.topRight, .bottomRight])
-                }
-                .disabled(value >= range.upperBound)
+                    .onLongPressGesture(minimumDuration: 0.3, pressing: { pressing in
+                        if pressing {
+                            startIncrementing()
+                        } else {
+                            stopTimer()
+                        }
+                    }, perform: {})
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -90,6 +99,67 @@ struct NumberInputStepper: View {
                 textValue = "\(newValue)"
             }
         }
+        .onDisappear {
+            stopTimer()
+        }
+    }
+
+    private func incrementValue(by amount: Int) {
+        let newValue = min(value + amount, range.upperBound)
+        if newValue != value {
+            value = newValue
+            textValue = "\(value)"
+        }
+    }
+
+    private func decrementValue(by amount: Int) {
+        let newValue = max(value - amount, range.lowerBound)
+        if newValue != value {
+            value = newValue
+            textValue = "\(value)"
+        }
+    }
+
+    private func startIncrementing() {
+        isLongPressing = true
+        var tickCount = 0
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            tickCount += 1
+            // Speed up the increment rate over time
+            let increment: Int
+            if tickCount > 50 {
+                increment = 100 // Very fast after 5 seconds
+            } else if tickCount > 20 {
+                increment = 10  // Faster after 2 seconds
+            } else {
+                increment = 1   // Normal speed
+            }
+            incrementValue(by: increment)
+        }
+    }
+
+    private func startDecrementing() {
+        isLongPressing = true
+        var tickCount = 0
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            tickCount += 1
+            // Speed up the decrement rate over time
+            let decrement: Int
+            if tickCount > 50 {
+                decrement = 100 // Very fast after 5 seconds
+            } else if tickCount > 20 {
+                decrement = 10  // Faster after 2 seconds
+            } else {
+                decrement = 1   // Normal speed
+            }
+            decrementValue(by: decrement)
+        }
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+        isLongPressing = false
     }
 
     private func commitTextValue() {
@@ -128,8 +198,8 @@ struct RoundedCorner: Shape {
 
         var body: some View {
             Form {
-                NumberInputStepper(label: "Rows", value: $value, range: 1...15)
-                NumberInputStepper(label: "Columns", value: $value, range: 1...15)
+                NumberInputStepper(label: "Rows", value: $value, range: 1...100)
+                NumberInputStepper(label: "Total Desks", value: $value, range: 1...1000)
             }
         }
     }
