@@ -1,9 +1,58 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="true" userDefinedModelVersionIdentifier="">
-    <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
-        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22758" systemVersion="23A344" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="true" userDefinedModelVersionIdentifier="">
+    <entity name="AttendanceRecord" representedClassName="AttendanceRecord" syncable="YES" codeGenerationType="class">
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+        <relationship name="classPeriod" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ClassPeriod" inverseName="attendanceRecords" inverseEntity="ClassPeriod"/>
+        <relationship name="student" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Student" inverseName="attendanceRecords" inverseEntity="Student"/>
     </entity>
-    <elements>
-        <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
-    </elements>
+    <entity name="ClassPeriod" representedClassName="ClassPeriod" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="subject" optional="YES" attributeType="String"/>
+        <relationship name="attendanceRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AttendanceRecord" inverseName="classPeriod" inverseEntity="AttendanceRecord"/>
+        <relationship name="classroom" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Classroom" inverseName="classes" inverseEntity="Classroom"/>
+        <relationship name="classrooms" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Classroom" inverseName="classPeriods" inverseEntity="Classroom"/>
+        <relationship name="seatAssignments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatAssignment" inverseName="classPeriod" inverseEntity="SeatAssignment"/>
+        <relationship name="students" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Student" inverseName="classPeriod" inverseEntity="Student"/>
+    </entity>
+    <entity name="Classroom" representedClassName="Classroom" syncable="YES" codeGenerationType="class">
+        <attribute name="columns" optional="NO" attributeType="Integer 16" defaultValueString="8" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="deskPositions" optional="YES" attributeType="Binary"/>
+        <attribute name="gridHeight" optional="NO" attributeType="Integer 16" defaultValueString="5" usesScalarValueType="YES"/>
+        <attribute name="gridWidth" optional="NO" attributeType="Integer 16" defaultValueString="8" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isActive" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="rows" optional="NO" attributeType="Integer 16" defaultValueString="5" usesScalarValueType="YES"/>
+        <relationship name="classes" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="ClassPeriod" inverseName="classroom" inverseEntity="ClassPeriod"/>
+        <relationship name="classPeriods" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="ClassPeriod" inverseName="classrooms" inverseEntity="ClassPeriod"/>
+        <relationship name="seatAssignments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatAssignment" inverseName="classroom" inverseEntity="SeatAssignment"/>
+    </entity>
+    <entity name="SeatAssignment" representedClassName="SeatAssignment" syncable="YES" codeGenerationType="class">
+        <attribute name="assignedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="column" optional="NO" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="deskX" optional="NO" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="deskY" optional="NO" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="row" optional="NO" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="classroom" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Classroom" inverseName="seatAssignments" inverseEntity="Classroom"/>
+        <relationship name="classPeriod" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ClassPeriod" inverseName="seatAssignments" inverseEntity="ClassPeriod"/>
+        <relationship name="student" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Student" inverseName="seatAssignments" inverseEntity="Student"/>
+    </entity>
+    <entity name="Student" representedClassName="Student" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="firstName" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastName" optional="YES" attributeType="String"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="photoData" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <attribute name="studentID" optional="YES" attributeType="String"/>
+        <relationship name="attendanceRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AttendanceRecord" inverseName="student" inverseEntity="AttendanceRecord"/>
+        <relationship name="classPeriod" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ClassPeriod" inverseName="students" inverseEntity="ClassPeriod"/>
+        <relationship name="seatAssignments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatAssignment" inverseName="student" inverseEntity="SeatAssignment"/>
+    </entity>
 </model>
