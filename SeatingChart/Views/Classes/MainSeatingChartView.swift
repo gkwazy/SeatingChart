@@ -447,6 +447,7 @@ struct LayoutPickerSheet: View {
     let onEditLayout: () -> Void
 
     @State private var showingCreateFlow = false
+    @State private var showingEditFlow = false
 
     var layouts: [Classroom] {
         let classrooms = classPeriod.classrooms as? Set<Classroom> ?? []
@@ -498,8 +499,7 @@ struct LayoutPickerSheet: View {
 
                     if currentLayout != nil {
                         Button {
-                            dismiss()
-                            onEditLayout()
+                            showingEditFlow = true
                         } label: {
                             Label("Edit Current Layout", systemImage: "pencil")
                         }
@@ -517,6 +517,11 @@ struct LayoutPickerSheet: View {
             }
             .fullScreenCover(isPresented: $showingCreateFlow) {
                 CreateLayoutFlowView(classPeriod: classPeriod, isPresented: $showingCreateFlow)
+            }
+            .fullScreenCover(isPresented: $showingEditFlow) {
+                if let layout = currentLayout {
+                    EditLayoutFlowView(classroom: layout, isPresented: $showingEditFlow)
+                }
             }
         }
     }

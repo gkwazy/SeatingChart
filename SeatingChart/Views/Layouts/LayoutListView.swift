@@ -449,6 +449,394 @@ struct CreateLayoutFlowView: View {
     }
 }
 
+// MARK: - Edit Layout Flow
+
+enum EditLayoutStep {
+    case name
+    case options
+    case template
+    case configuration
+}
+
+struct EditLayoutFlowView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject var classroom: Classroom
+    @Binding var isPresented: Bool
+
+    @State private var currentStep: EditLayoutStep = .name
+    @State private var layoutName = ""
+    @State private var selectedTemplate: LayoutTemplate?
+    @State private var config = TemplateConfiguration()
+    @State private var navigateToEditor = false
+    @State private var applyNewTemplate = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch currentStep {
+                case .name:
+                    nameStepView
+                case .options:
+                    optionsStepView
+                case .template:
+                    templateStepView
+                case .configuration:
+                    configurationStepView
+                }
+            }
+            .navigationDestination(isPresented: $navigateToEditor) {
+                EnhancedLayoutEditorView(classroom: classroom)
+                    .navigationBarBackButtonHidden(true)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Done") {
+                                isPresented = false
+                            }
+                        }
+                    }
+            }
+        }
+        .onAppear {
+            layoutName = classroom.name ?? ""
+        }
+    }
+
+    // MARK: - Step 1: Name
+
+    private var nameStepView: some View {
+        Form {
+            Section(header: Text("Layout Name")) {
+                TextField("Enter a name", text: $layoutName)
+                    .textInputAutocapitalization(.words)
+            }
+
+            Section {
+                Text("You can rename your layout here.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .navigationTitle("Edit Layout")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") {
+                    isPresented = false
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Next") {
+                    saveNameAndContinue()
+                    currentStep = .options
+                }
+                .disabled(layoutName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    // MARK: - Step 2: Options
+
+    private var optionsStepView: some View {
+        Form {
+            Section(header: Text("What would you like to do?")) {
+                Button {
+                    applyNewTemplate = true
+                    currentStep = .template
+                } label: {
+                    HStack {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                            .frame(width: 40)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Apply New Template")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text("Replace current desks with a new layout")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
+
+                Button {
+                    applyNewTemplate = false
+                    navigateToEditor = true
+                } label: {
+                    HStack {
+                        Image(systemName: "pencil.and.outline")
+                            .font(.title2)
+                            .foregroundColor(.green)
+                            .frame(width: 40)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Edit Current Layout")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text("Manually adjust desk positions")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+
+            if let deskData = classroom.deskPositions,
+               let deskCount = try? JSONDecoder().decode([Desk].self, from: deskData).count {
+                Section(header: Text("Current Layout")) {
+                    HStack {
+                        Image(systemName: "square.grid.3x3")
+                            .foregroundColor(.blue)
+                        Text("\(deskCount) desks")
+                    }
+                }
+            }
+        }
+        .navigationTitle("Edit Options")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Back") {
+                    currentStep = .name
+                }
+            }
+        }
+    }
+
+    // MARK: - Step 3: Template Selection
+
+    private var templateStepView: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], spacing: 20) {
+                ForEach(LayoutTemplate.allCases) { template in
+                    TemplateCard(template: template, isSelected: selectedTemplate == template) {
+                        selectedTemplate = template
+                    }
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Choose Template")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Back") {
+                    currentStep = .options
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Next") {
+                    if let template = selectedTemplate {
+                        if template.needsConfiguration {
+                            setDefaultsForTemplate(template)
+                            currentStep = .configuration
+                        } else {
+                            applyTemplateAndNavigate()
+                        }
+                    }
+                }
+                .disabled(selectedTemplate == nil)
+            }
+        }
+    }
+
+    // MARK: - Step 4: Configuration
+
+    private var configurationStepView: some View {
+        Form {
+            Section(header: Text("Total Desks")) {
+                Stepper("Number of Desks: \(config.totalDesks)", value: $config.totalDesks, in: 1...100)
+                Text("This is the maximum number of desks that will be created")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if let template = selectedTemplate {
+                templateConfigSection(for: template)
+
+                Section(header: Text("Preview")) {
+                    previewInfo(for: template)
+                }
+            }
+        }
+        .navigationTitle("Configure Layout")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Back") {
+                    currentStep = .template
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Apply") {
+                    applyTemplateAndNavigate()
+                }
+                .fontWeight(.semibold)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func templateConfigSection(for template: LayoutTemplate) -> some View {
+        switch template {
+        case .traditionalRows:
+            Section(header: Text("Grid Layout")) {
+                Stepper("Rows: \(config.rows)", value: $config.rows, in: 1...15)
+                Stepper("Columns: \(config.columns)", value: $config.columns, in: 1...15)
+            }
+
+        case .pairs:
+            Section(header: Text("Pairs Layout")) {
+                Stepper("Pair Columns: \(config.pairColumns)", value: $config.pairColumns, in: 1...10)
+                Stepper("Rows of Pairs: \(config.pairRows)", value: $config.pairRows, in: 1...10)
+            }
+
+        case .groups:
+            Section(header: Text("Group Layout")) {
+                Stepper("Number of Groups: \(config.numberOfGroups)", value: $config.numberOfGroups, in: 1...20)
+                Stepper("Desks per Group: \(config.desksPerGroup)", value: $config.desksPerGroup, in: 2...8)
+            }
+
+        case .uShape:
+            Section(header: Text("U-Shape Layout")) {
+                Stepper("Top Seats: \(config.uShapeTopCount)", value: $config.uShapeTopCount, in: 3...15)
+                Stepper("Side Seats (each): \(config.uShapeSideCount)", value: $config.uShapeSideCount, in: 1...10)
+            }
+
+        case .labStations:
+            Section(header: Text("Lab Stations")) {
+                Stepper("Number of Stations: \(config.numberOfStations)", value: $config.numberOfStations, in: 1...12)
+                Stepper("Seats per Station: \(config.seatsPerStation)", value: $config.seatsPerStation, in: 2...8)
+            }
+
+        case .choirLoft:
+            Section(header: Text("Choir Loft Layout")) {
+                Stepper("Rows: \(config.choirRows)", value: $config.choirRows, in: 2...10)
+                Stepper("Columns: \(config.choirColumns)", value: $config.choirColumns, in: 3...15)
+            }
+
+        case .empty:
+            Section {
+                Text("Empty room - you'll add desks manually")
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func previewInfo(for template: LayoutTemplate) -> some View {
+        let capacity = templateCapacity(for: template)
+        let actualCount = min(capacity, config.totalDesks)
+
+        HStack {
+            Image(systemName: template.icon)
+                .font(.title)
+                .foregroundColor(.blue)
+                .frame(width: 50)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Will create \(actualCount) desks")
+                    .font(.headline)
+
+                if actualCount < config.totalDesks {
+                    Text("Template capacity is \(capacity)")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func templateCapacity(for template: LayoutTemplate) -> Int {
+        switch template {
+        case .traditionalRows: return config.rows * config.columns
+        case .pairs: return config.pairColumns * config.pairRows * 2
+        case .groups: return config.numberOfGroups * config.desksPerGroup
+        case .uShape: return config.uShapeTotalSeats
+        case .labStations: return config.numberOfStations
+        case .choirLoft:
+            var total = 0
+            for row in 0..<config.choirRows {
+                total += row % 2 == 1 ? config.choirColumns - 1 : config.choirColumns
+            }
+            return total
+        case .empty: return 0
+        }
+    }
+
+    private func setDefaultsForTemplate(_ template: LayoutTemplate) {
+        switch template {
+        case .traditionalRows:
+            config.rows = 5
+            config.columns = 6
+            config.totalDesks = 30
+        case .pairs:
+            config.pairColumns = 4
+            config.pairRows = 5
+            config.totalDesks = 40
+        case .groups:
+            config.numberOfGroups = 6
+            config.desksPerGroup = 4
+            config.totalDesks = 24
+        case .uShape:
+            config.uShapeTopCount = 7
+            config.uShapeSideCount = 4
+            config.totalDesks = 15
+        case .labStations:
+            config.numberOfStations = 6
+            config.seatsPerStation = 4
+            config.totalDesks = 6
+        case .choirLoft:
+            config.choirRows = 4
+            config.choirColumns = 8
+            config.totalDesks = 30
+        case .empty:
+            config.totalDesks = 0
+        }
+    }
+
+    private func saveNameAndContinue() {
+        classroom.name = layoutName.trimmingCharacters(in: .whitespaces)
+        try? viewContext.save()
+    }
+
+    private func applyTemplateAndNavigate() {
+        guard let template = selectedTemplate else { return }
+
+        // Generate new desks from template
+        let roomSize = CGSize(width: 1000, height: 800)
+        let desks = template.generateDesks(in: roomSize, config: config)
+
+        if let desksData = try? JSONEncoder().encode(desks) {
+            classroom.deskPositions = desksData
+        }
+
+        classroom.rows = Int16(config.rows)
+        classroom.columns = Int16(config.columns)
+
+        do {
+            try viewContext.save()
+            navigateToEditor = true
+        } catch {
+            print("Error saving layout: \(error.localizedDescription)")
+        }
+    }
+}
+
 #Preview {
     let context = PersistenceController.preview.container.viewContext
     let classPeriod = ClassPeriod(context: context)
