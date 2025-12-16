@@ -339,25 +339,36 @@ struct CreateLayoutFlowView: View {
         let capacity = templateCapacity(for: template)
         let actualCount = min(capacity, config.totalDesks)
 
-        HStack {
-            Image(systemName: template.icon)
-                .font(.title)
-                .foregroundColor(.blue)
-                .frame(width: 50)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: template.icon)
+                    .font(.title)
+                    .foregroundColor(.blue)
+                    .frame(width: 40)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Will create \(actualCount) desks")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Template capacity: \(capacity) desks")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
 
-                if actualCount < config.totalDesks {
-                    Text("Template capacity is \(capacity)")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                } else {
-                    Text("Matches your requested total")
-                        .font(.caption)
-                        .foregroundColor(.green)
+                    Text("Will create: \(actualCount) desks")
+                        .font(.headline)
+                        .foregroundColor(.primary)
                 }
+            }
+
+            if capacity < config.totalDesks {
+                Text("Template can only fit \(capacity) of your \(config.totalDesks) requested desks")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            } else if capacity > config.totalDesks {
+                Text("Limited to \(config.totalDesks) desks (template could fit \(capacity))")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            } else {
+                Text("Perfect match!")
+                    .font(.caption)
+                    .foregroundColor(.green)
             }
         }
         .padding(.vertical, 4)
@@ -737,21 +748,36 @@ struct EditLayoutFlowView: View {
         let capacity = templateCapacity(for: template)
         let actualCount = min(capacity, config.totalDesks)
 
-        HStack {
-            Image(systemName: template.icon)
-                .font(.title)
-                .foregroundColor(.blue)
-                .frame(width: 50)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: template.icon)
+                    .font(.title)
+                    .foregroundColor(.blue)
+                    .frame(width: 40)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Will create \(actualCount) desks")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Template capacity: \(capacity) desks")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
 
-                if actualCount < config.totalDesks {
-                    Text("Template capacity is \(capacity)")
-                        .font(.caption)
-                        .foregroundColor(.orange)
+                    Text("Will create: \(actualCount) desks")
+                        .font(.headline)
+                        .foregroundColor(.primary)
                 }
+            }
+
+            if capacity < config.totalDesks {
+                Text("Template can only fit \(capacity) of your \(config.totalDesks) requested desks")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            } else if capacity > config.totalDesks {
+                Text("Limited to \(config.totalDesks) desks (template could fit \(capacity))")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            } else {
+                Text("Perfect match!")
+                    .font(.caption)
+                    .foregroundColor(.green)
             }
         }
         .padding(.vertical, 4)
