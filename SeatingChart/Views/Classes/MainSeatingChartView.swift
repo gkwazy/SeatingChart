@@ -446,8 +446,7 @@ struct LayoutPickerSheet: View {
     let onSelectLayout: (Classroom) -> Void
     let onEditLayout: () -> Void
 
-    @State private var showingNewLayoutSheet = false
-    @State private var newLayoutName = ""
+    @State private var showingCreateFlow = false
 
     var layouts: [Classroom] {
         let classrooms = classPeriod.classrooms as? Set<Classroom> ?? []
@@ -492,7 +491,7 @@ struct LayoutPickerSheet: View {
 
                 Section {
                     Button {
-                        showingNewLayoutSheet = true
+                        showingCreateFlow = true
                     } label: {
                         Label("Create New Layout", systemImage: "plus.circle")
                     }
@@ -516,39 +515,9 @@ struct LayoutPickerSheet: View {
                     }
                 }
             }
-            .alert("New Layout", isPresented: $showingNewLayoutSheet) {
-                TextField("Layout Name", text: $newLayoutName)
-                Button("Cancel", role: .cancel) {
-                    newLayoutName = ""
-                }
-                Button("Create") {
-                    createNewLayout()
-                }
-            } message: {
-                Text("Enter a name for the new layout")
+            .fullScreenCover(isPresented: $showingCreateFlow) {
+                CreateLayoutFlowView(classPeriod: classPeriod, isPresented: $showingCreateFlow)
             }
-        }
-    }
-
-    private func createNewLayout() {
-        let newLayout = Classroom(context: viewContext)
-        newLayout.id = UUID()
-        newLayout.name = newLayoutName.isEmpty ? "New Layout" : newLayoutName
-        newLayout.rows = 5
-        newLayout.columns = 6
-        newLayout.isActive = layouts.isEmpty // Make active if first layout
-
-        // Add to the classPeriod's classrooms relationship
-        let mutableClassrooms = classPeriod.mutableSetValue(forKey: "classrooms")
-        mutableClassrooms.add(newLayout)
-
-        try? viewContext.save()
-        newLayoutName = ""
-
-        // If this is the first layout, select it and open editor
-        if layouts.count == 1 {
-            onSelectLayout(newLayout)
-            dismiss()
         }
     }
 
