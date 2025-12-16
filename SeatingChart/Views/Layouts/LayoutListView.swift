@@ -387,33 +387,29 @@ struct CreateLayoutFlowView: View {
     }
 
     private func setDefaultsForTemplate(_ template: LayoutTemplate) {
+        // Only set template-specific defaults, NOT totalDesks
+        // User controls totalDesks - it's "the law"
         switch template {
         case .traditionalRows:
             config.rows = 5
             config.columns = 6
-            config.totalDesks = 30
         case .pairs:
             config.pairColumns = 4
             config.pairRows = 5
-            config.totalDesks = 40
         case .groups:
             config.numberOfGroups = 6
             config.desksPerGroup = 4
-            config.totalDesks = 24
         case .uShape:
             config.uShapeTopCount = 7
             config.uShapeSideCount = 4
-            config.totalDesks = 15
         case .labStations:
             config.numberOfStations = 6
             config.seatsPerStation = 4
-            config.totalDesks = 6
         case .choirLoft:
             config.choirRows = 4
             config.choirColumns = 8
-            config.totalDesks = 30
         case .empty:
-            config.totalDesks = 0
+            break
         }
     }
 
@@ -779,33 +775,29 @@ struct EditLayoutFlowView: View {
     }
 
     private func setDefaultsForTemplate(_ template: LayoutTemplate) {
+        // Only set template-specific defaults, NOT totalDesks
+        // User controls totalDesks - it's "the law"
         switch template {
         case .traditionalRows:
             config.rows = 5
             config.columns = 6
-            config.totalDesks = 30
         case .pairs:
             config.pairColumns = 4
             config.pairRows = 5
-            config.totalDesks = 40
         case .groups:
             config.numberOfGroups = 6
             config.desksPerGroup = 4
-            config.totalDesks = 24
         case .uShape:
             config.uShapeTopCount = 7
             config.uShapeSideCount = 4
-            config.totalDesks = 15
         case .labStations:
             config.numberOfStations = 6
             config.seatsPerStation = 4
-            config.totalDesks = 6
         case .choirLoft:
             config.choirRows = 4
             config.choirColumns = 8
-            config.totalDesks = 30
         case .empty:
-            config.totalDesks = 0
+            break
         }
     }
 
