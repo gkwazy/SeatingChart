@@ -236,7 +236,7 @@ struct CreateLayoutFlowView: View {
         Form {
             // Total desks - "the law"
             Section(header: Text("Total Desks")) {
-                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...100)
+                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...1000)
                 Text("This is the maximum number of desks that will be created")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -654,7 +654,7 @@ struct EditLayoutFlowView: View {
     private var configurationStepView: some View {
         Form {
             Section(header: Text("Total Desks")) {
-                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...100)
+                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...1000)
                 Text("This is the maximum number of desks that will be created")
                     .font(.caption)
                     .foregroundColor(.secondary)
