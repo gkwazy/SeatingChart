@@ -274,8 +274,8 @@ struct CreateLayoutFlowView: View {
         switch template {
         case .traditionalRows:
             Section(header: Text("Grid Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...15)
-                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...15)
+                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...100)
+                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...100)
                 Text("Grid capacity: \(config.rows * config.columns) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -283,8 +283,8 @@ struct CreateLayoutFlowView: View {
 
         case .pairs:
             Section(header: Text("Pairs Layout")) {
-                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...10)
-                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...10)
+                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...50)
+                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...50)
                 Text("Capacity: \(config.pairColumns * config.pairRows * 2) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -292,8 +292,8 @@ struct CreateLayoutFlowView: View {
 
         case .groups:
             Section(header: Text("Group Layout")) {
-                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...20)
-                NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...8)
+                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...200)
+                NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...20)
                 Text("Capacity: \(config.numberOfGroups * config.desksPerGroup) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -301,8 +301,8 @@ struct CreateLayoutFlowView: View {
 
         case .uShape:
             Section(header: Text("U-Shape Layout")) {
-                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 3...15)
-                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...10)
+                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 1...100)
+                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...100)
                 Text("Capacity: \(config.uShapeTotalSeats) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -310,8 +310,8 @@ struct CreateLayoutFlowView: View {
 
         case .labStations:
             Section(header: Text("Lab Stations")) {
-                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...12)
-                NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...8)
+                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...200)
+                NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...20)
                 Text("Each station is a round table")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -319,8 +319,8 @@ struct CreateLayoutFlowView: View {
 
         case .choirLoft:
             Section(header: Text("Choir Loft Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 2...10)
-                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 3...15)
+                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 1...100)
+                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 1...100)
                 Text("Seats are staggered in alternating rows")
                     .font(.caption)
                     .foregroundColor(.blue)
@@ -690,38 +690,38 @@ struct EditLayoutFlowView: View {
         switch template {
         case .traditionalRows:
             Section(header: Text("Grid Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...15)
-                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...15)
+                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...100)
+                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...100)
             }
 
         case .pairs:
             Section(header: Text("Pairs Layout")) {
-                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...10)
-                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...10)
+                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...50)
+                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...50)
             }
 
         case .groups:
             Section(header: Text("Group Layout")) {
-                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...20)
-                NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...8)
+                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...200)
+                NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...20)
             }
 
         case .uShape:
             Section(header: Text("U-Shape Layout")) {
-                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 3...15)
-                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...10)
+                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 1...100)
+                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...100)
             }
 
         case .labStations:
             Section(header: Text("Lab Stations")) {
-                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...12)
-                NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...8)
+                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...200)
+                NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...20)
             }
 
         case .choirLoft:
             Section(header: Text("Choir Loft Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 2...10)
-                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 3...15)
+                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 1...100)
+                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 1...100)
             }
 
         case .empty:
