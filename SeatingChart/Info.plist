@@ -10,10 +10,6 @@
 	<string>SeatingChart needs access to your photo library to add student photos for easy identification in seating charts.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>SeatingChart can use your camera to take student photos for easy identification in seating charts.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
