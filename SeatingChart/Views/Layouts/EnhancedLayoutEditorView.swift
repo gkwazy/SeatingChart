@@ -2,11 +2,55 @@
 //  EnhancedLayoutEditorView.swift
 //  SeatingChart
 //
-//  Created by Claude
+//  Redesigned with Apple HIG patterns for editor UI
+//  Refactored: Command pattern for memory-efficient undo/redo
 //
 
 import SwiftUI
 import CoreData
+
+// MARK: - Undo Command (Memory-Efficient Command Pattern)
+
+/// Represents a reversible edit operation storing only the delta
+enum UndoCommand {
+    case addDesk(Desk)
+    case removeDesks([Desk])
+    case moveDesk(id: UUID, from: CGPoint, to: CGPoint)
+    case replaceAll(oldDesks: [Desk], newDesks: [Desk])
+
+    /// Apply this command (for redo)
+    func apply(to desks: inout [Desk]) {
+        switch self {
+        case .addDesk(let desk):
+            desks.append(desk)
+        case .removeDesks(let removed):
+            let removedIDs = Set(removed.map { $0.id })
+            desks.removeAll { removedIDs.contains($0.id) }
+        case .moveDesk(let id, _, let to):
+            if let index = desks.firstIndex(where: { $0.id == id }) {
+                desks[index].position = to
+            }
+        case .replaceAll(_, let newDesks):
+            desks = newDesks
+        }
+    }
+
+    /// Reverse this command (for undo)
+    func reverse(to desks: inout [Desk]) {
+        switch self {
+        case .addDesk(let desk):
+            desks.removeAll { $0.id == desk.id }
+        case .removeDesks(let removed):
+            desks.append(contentsOf: removed)
+        case .moveDesk(let id, let from, _):
+            if let index = desks.firstIndex(where: { $0.id == id }) {
+                desks[index].position = from
+            }
+        case .replaceAll(let oldDesks, _):
+            desks = oldDesks
+        }
+    }
+}
 
 struct EnhancedLayoutEditorView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -22,24 +66,33 @@ struct EnhancedLayoutEditorView: View {
     @State private var displayOptions = DisplayOptions.default
     @State private var showingTemplatePicker = false
     @State private var showingDeskTypePicker = false
-    @State private var isMultiSelectMode = false
+    @State private var showingDiscardAlert = false
     @State private var alignmentGuides: [AlignmentGuide] = []
+    @State private var showingSaveError = false
+    @State private var saveErrorMessage = ""
 
-    // Undo/Redo
-    @State private var undoStack: [[Desk]] = []
-    @State private var redoStack: [[Desk]] = []
+    // Undo/Redo - Command pattern for memory efficiency
+    @State private var undoStack: [UndoCommand] = []
+    @State private var redoStack: [UndoCommand] = []
+    private let maxUndoHistory = 50
 
     // Room settings
     @State private var roomSize = CGSize(width: 1000, height: 800)
 
-    // Gesture state
+    // Gesture state for drag tracking
     @State private var draggedDeskID: UUID?
     @State private var dragStartPosition: CGPoint?
+    @State private var currentDragPosition: CGPoint?
+
+    // Computed properties
+    private var isMultiSelectMode: Bool {
+        selectedDeskIDs.count > 1
+    }
 
     var body: some View {
         ZStack {
             // Background
-            Color(.systemGroupedBackground)
+            Theme.Colors.ivory
                 .ignoresSafeArea()
 
             // Main canvas
@@ -91,57 +144,56 @@ struct EnhancedLayoutEditorView: View {
                 .coordinateSpace(name: "canvas")
             }
 
-            // Floating action button for adding desks
-            if viewMode == .edit && !isMultiSelectMode {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: { showingDeskTypePicker = true }) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 56))
-                                .foregroundColor(.blue)
-                                .background(Circle().fill(Color.white))
-                        }
-                        .padding(.trailing, 30)
-                        .padding(.bottom, 30)
-                        .shadow(radius: 4)
-                    }
-                }
+            // Bottom toolbar
+            VStack {
+                Spacer()
+                bottomToolbar
             }
         }
         .navigationTitle(classroom.name ?? "Layout Editor")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            // Left: Cancel
             ToolbarItem(placement: .navigationBarLeading) {
                 Button("Cancel") {
-                    dismiss()
+                    if hasUnsavedChanges {
+                        showingDiscardAlert = true
+                    } else {
+                        dismiss()
+                    }
                 }
+                .foregroundColor(Theme.Colors.slate)
             }
 
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if viewMode == .edit {
-                    editModeButtons
-                }
-
-                Menu {
-                    displayOptionsMenu
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-
-                Button("Save") {
+            // Right: Done (saves and exits)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") {
                     saveDesks()
                     dismiss()
                 }
                 .fontWeight(.semibold)
+                .foregroundColor(Theme.Colors.primary)
             }
         }
+        .alert("Discard Changes?", isPresented: $showingDiscardAlert) {
+            Button("Discard", role: .destructive) {
+                dismiss()
+            }
+            Button("Keep Editing", role: .cancel) { }
+        } message: {
+            Text("You have unsaved changes to this layout. Are you sure you want to discard them?")
+        }
+        .alert("Save Failed", isPresented: $showingSaveError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(saveErrorMessage)
+        }
         .sheet(isPresented: $showingTemplatePicker) {
-            TemplatePickerView(selectedTemplate: { template in
-                applyTemplate(template)
-                showingTemplatePicker = false
-            })
+            PresetTemplatePickerView(roomSize: roomSize) { newDesks in
+                applyDesks(newDesks)
+                hasUnsavedChanges = true
+            }
         }
         .sheet(isPresented: $showingDeskTypePicker) {
             DeskTypePickerView(selectedType: { type in
@@ -154,64 +206,135 @@ struct EnhancedLayoutEditorView: View {
         }
     }
 
-    // MARK: - Subviews
+    // MARK: - Bottom Toolbar (Apple HIG style)
 
-    private var modePicker: some View {
-        Menu {
-            ForEach(ViewMode.allCases) { mode in
-                Button(action: { viewMode = mode }) {
-                    Label(mode.displayName, systemImage: mode.icon)
+    private var bottomToolbar: some View {
+        VStack(spacing: 0) {
+            // Desk count indicator (Issue 1: shows live count)
+            HStack {
+                Spacer()
+                HStack(spacing: Theme.Spacing.xxs) {
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("\(desks.count) desk\(desks.count == 1 ? "" : "s")")
+                        .font(Theme.Typography.caption(12, weight: .semibold))
+                }
+                .foregroundColor(Theme.Colors.forest)
+                .padding(.horizontal, Theme.Spacing.sm)
+                .padding(.vertical, Theme.Spacing.xxs)
+                .background(Theme.Colors.forest.opacity(0.1))
+                .cornerRadius(Theme.Radius.full)
+                Spacer()
+            }
+            .padding(.bottom, Theme.Spacing.xs)
+
+            HStack(spacing: 0) {
+                // Template picker button
+                ToolbarButton(
+                    icon: "square.grid.2x2",
+                    label: "Templates",
+                    action: { showingTemplatePicker = true }
+                )
+
+                Spacer()
+
+                // Add desk button
+                ToolbarButton(
+                    icon: "plus.rectangle",
+                    label: "Add Desk",
+                    action: { showingDeskTypePicker = true }
+                )
+
+                Spacer()
+
+                // Delete desk button (Issue 1: add delete capability)
+                ToolbarButton(
+                    icon: "trash",
+                    label: "Delete",
+                    isDisabled: selectedDeskIDs.isEmpty,
+                    action: deleteSelectedDesks
+                )
+
+                Spacer()
+
+                // Undo button
+                ToolbarButton(
+                    icon: "arrow.uturn.backward",
+                    label: "Undo",
+                    isDisabled: undoStack.isEmpty,
+                    action: undo
+                )
+
+                Spacer()
+
+                // Options menu
+                Menu {
+                    displayOptionsMenu
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 22))
+                        Text("More")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(Theme.Colors.slate)
+                    .frame(minWidth: 60)
                 }
             }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: viewMode.icon)
-                Text(viewMode.displayName)
-                    .font(.subheadline)
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
-            }
         }
-    }
-
-    @ViewBuilder
-    private var editModeButtons: some View {
-        // Undo button
-        Button(action: undo) {
-            Image(systemName: "arrow.uturn.backward")
-        }
-        .disabled(undoStack.isEmpty)
-
-        // Redo button
-        Button(action: redo) {
-            Image(systemName: "arrow.uturn.forward")
-        }
-        .disabled(redoStack.isEmpty)
-
-        // Multi-select toggle
-        Button(action: { isMultiSelectMode.toggle() }) {
-            Image(systemName: isMultiSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-        }
-
-        // Template button
-        Button(action: { showingTemplatePicker = true }) {
-            Image(systemName: "square.grid.3x3")
-        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .shadow(color: Color.black.opacity(0.1), radius: 8, y: -2)
+        )
     }
 
     @ViewBuilder
     private var displayOptionsMenu: some View {
-        Toggle("Show Photos", isOn: $displayOptions.showStudentPhotos)
-        Toggle("Show Names", isOn: $displayOptions.showStudentNames)
-        Toggle("Privacy Blur", isOn: $displayOptions.privacyBlur)
-
-        if viewMode == .edit {
-            Divider()
+        Section {
             Toggle("Show Grid", isOn: $displayOptions.showGrid)
+            Toggle("Show Photos", isOn: $displayOptions.showStudentPhotos)
+            Toggle("Show Names", isOn: $displayOptions.showStudentNames)
         }
 
-        Divider()
-        Button("Clear All Desks", role: .destructive, action: clearAllDesks)
+        Section {
+            if !redoStack.isEmpty {
+                Button(action: redo) {
+                    Label("Redo", systemImage: "arrow.uturn.forward")
+                }
+            }
+        }
+
+        Section {
+            Button(role: .destructive, action: clearAllDesks) {
+                Label("Clear All Desks", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: - Toolbar Button Component
+
+    private struct ToolbarButton: View {
+        let icon: String
+        let label: String
+        var isDisabled: Bool = false
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                VStack(spacing: 4) {
+                    Image(systemName: icon)
+                        .font(.system(size: 22))
+                    Text(label)
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(isDisabled ? Theme.Colors.stone : Theme.Colors.primary)
+                .frame(minWidth: 60)
+            }
+            .disabled(isDisabled)
+        }
     }
 
     // MARK: - Gestures
@@ -219,24 +342,25 @@ struct EnhancedLayoutEditorView: View {
     private func updateDeskPosition(at index: Int, to location: CGPoint) {
         guard index < desks.count else { return }
 
-        // Save undo state on first drag
+        // Record start position on first drag movement
         if draggedDeskID != desks[index].id {
-            saveUndoState()
             draggedDeskID = desks[index].id
+            dragStartPosition = desks[index].position
         }
 
-        var updatedDesk = desks[index]
-        updatedDesk.position = location
+        var newPosition = location
 
         // Snap to grid if enabled
         if displayOptions.showGrid {
-            updatedDesk.position = snapToGrid(updatedDesk.position)
+            newPosition = snapToGrid(newPosition)
         }
 
-        desks[index] = updatedDesk
+        currentDragPosition = newPosition
+        desks[index].position = newPosition
 
         // Calculate alignment guides
-        updateAlignmentGuides(for: updatedDesk)
+        updateAlignmentGuides(for: desks[index])
+        hasUnsavedChanges = true
     }
 
     // MARK: - Desk Management
@@ -261,8 +385,18 @@ struct EnhancedLayoutEditorView: View {
     }
 
     private func commitDeskDrag() {
+        // Record move command if position actually changed
+        if let deskID = draggedDeskID,
+           let startPos = dragStartPosition,
+           let endPos = currentDragPosition,
+           startPos != endPos {
+            let command = UndoCommand.moveDesk(id: deskID, from: startPos, to: endPos)
+            pushUndoCommand(command)
+        }
+
         draggedDeskID = nil
         dragStartPosition = nil
+        currentDragPosition = nil
         alignmentGuides = []
     }
 
@@ -304,50 +438,98 @@ struct EnhancedLayoutEditorView: View {
     }
 
     private func addDesk(type: DeskType) {
-        saveUndoState()
+        // Calculate center position snapped to grid
+        let centerX = roomSize.width / 2
+        let centerY = roomSize.height / 2
+        let snappedPosition = snapToGrid(CGPoint(x: centerX, y: centerY))
 
         let newDesk = Desk(
-            position: CGPoint(x: roomSize.width / 2, y: roomSize.height / 2),
+            position: snappedPosition,
             type: type
         )
+
+        // Record command and apply
+        let command = UndoCommand.addDesk(newDesk)
+        pushUndoCommand(command)
         desks.append(newDesk)
+
         selectedDeskIDs = [newDesk.id]
+        hasUnsavedChanges = true
     }
 
     private func clearAllDesks() {
-        saveUndoState()
+        guard !desks.isEmpty else { return }
+
+        // Record command with all current desks for undo
+        let command = UndoCommand.replaceAll(oldDesks: desks, newDesks: [])
+        pushUndoCommand(command)
+
         desks.removeAll()
         selectedDeskIDs.removeAll()
+        hasUnsavedChanges = true
+    }
+
+    /// Delete selected desks (Issue 1: supports desk deletion with count update)
+    private func deleteSelectedDesks() {
+        guard !selectedDeskIDs.isEmpty else { return }
+
+        // Capture desks being deleted for undo
+        let deletedDesks = desks.filter { selectedDeskIDs.contains($0.id) }
+        let command = UndoCommand.removeDesks(deletedDesks)
+        pushUndoCommand(command)
+
+        desks.removeAll { selectedDeskIDs.contains($0.id) }
+        selectedDeskIDs.removeAll()
+        hasUnsavedChanges = true
     }
 
     private func applyTemplate(_ template: LayoutTemplate) {
-        saveUndoState()
-        desks = template.generateDesks(in: roomSize, config: TemplateConfiguration())
+        let newDesks = template.generateDesks(in: roomSize, config: TemplateConfiguration(), gridSize: displayOptions.gridSize)
+
+        // Record full replacement for undo
+        let command = UndoCommand.replaceAll(oldDesks: desks, newDesks: newDesks)
+        pushUndoCommand(command)
+
+        desks = newDesks
         selectedDeskIDs.removeAll()
+        hasUnsavedChanges = true
     }
 
-    // MARK: - Undo/Redo
+    private func applyDesks(_ newDesks: [Desk]) {
+        // Record full replacement for undo
+        let command = UndoCommand.replaceAll(oldDesks: desks, newDesks: newDesks)
+        pushUndoCommand(command)
 
-    private func saveUndoState() {
-        undoStack.append(desks)
-        if undoStack.count > 50 { // Limit undo history
+        desks = newDesks
+        selectedDeskIDs.removeAll()
+        hasUnsavedChanges = true
+    }
+
+    // MARK: - Undo/Redo (Command Pattern)
+
+    /// Push a command onto the undo stack
+    private func pushUndoCommand(_ command: UndoCommand) {
+        undoStack.append(command)
+        if undoStack.count > maxUndoHistory {
             undoStack.removeFirst()
         }
         redoStack.removeAll()
     }
 
     private func undo() {
-        guard let previousState = undoStack.popLast() else { return }
-        redoStack.append(desks)
-        desks = previousState
+        guard let command = undoStack.popLast() else { return }
+        command.reverse(to: &desks)
+        redoStack.append(command)
         selectedDeskIDs.removeAll()
+        hasUnsavedChanges = true
     }
 
     private func redo() {
-        guard let nextState = redoStack.popLast() else { return }
-        undoStack.append(desks)
-        desks = nextState
+        guard let command = redoStack.popLast() else { return }
+        command.apply(to: &desks)
+        undoStack.append(command)
         selectedDeskIDs.removeAll()
+        hasUnsavedChanges = true
     }
 
     // MARK: - Data Persistence
@@ -364,10 +546,13 @@ struct EnhancedLayoutEditorView: View {
     }
 
     private func saveDesks() {
-        // Save desks to classroom.deskPositions
-        if let data = try? JSONEncoder().encode(desks) {
+        do {
+            let data = try JSONEncoder().encode(desks)
             classroom.deskPositions = data
-            try? viewContext.save()
+            try viewContext.save()
+        } catch {
+            saveErrorMessage = "Could not save layout: \(error.localizedDescription)"
+            showingSaveError = true
         }
     }
 

@@ -2,7 +2,7 @@
 //  ClassPeriod+Extensions.swift
 //  SeatingChart
 //
-//  Created by Claude
+//  Created by GKWazy Software
 //
 
 import Foundation

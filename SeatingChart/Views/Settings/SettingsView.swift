@@ -33,16 +33,8 @@ struct SettingsView: View {
                 }
             }
 
-            // Data Management Section
-            Section(header: Text("Data Management")) {
-                Button(action: exportAllData) {
-                    Label("Export All Data", systemImage: "square.and.arrow.up")
-                }
-
-                Button(action: importData) {
-                    Label("Import Data", systemImage: "square.and.arrow.down")
-                }
-            }
+            // Data Management Section - Phase 2
+            // Export/Import features coming in future update
 
             // Developer/Testing Section
             Section(header: Text("Testing & Demo"), footer: Text("Generate sample data for testing and demonstration purposes.")) {
@@ -86,25 +78,8 @@ struct SettingsView: View {
                     Label("About Seating Chart", systemImage: "app.fill")
                 }
 
-                Link(destination: URL(string: "https://example.com/privacy")!) {
-                    Label("Privacy Policy", systemImage: "hand.raised.fill")
-                }
-
-                Link(destination: URL(string: "https://example.com/terms")!) {
-                    Label("Terms of Service", systemImage: "doc.text.fill")
-                }
             }
 
-            // Support Section
-            Section(header: Text("Support")) {
-                Link(destination: URL(string: "mailto:support@example.com")!) {
-                    Label("Contact Support", systemImage: "envelope.fill")
-                }
-
-                Button(action: shareApp) {
-                    Label("Share App", systemImage: "square.and.arrow.up.fill")
-                }
-            }
         }
         .navigationTitle("Settings")
         .sheet(isPresented: $showingStorageMigration) {
@@ -123,20 +98,6 @@ struct SettingsView: View {
         }
     }
 
-    private func exportAllData() {
-        // Implement data export functionality
-        print("Export all data")
-    }
-
-    private func importData() {
-        // Implement data import functionality
-        print("Import data")
-    }
-
-    private func shareApp() {
-        // Implement app sharing
-        print("Share app")
-    }
 
     // MARK: - Test Data Functions
 
@@ -156,7 +117,14 @@ struct SettingsView: View {
 struct NotificationSettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("dailyReminderEnabled") private var dailyReminderEnabled = false
-    @AppStorage("reminderTime") private var reminderTime = Date()
+    @AppStorage("reminderTimeInterval") private var reminderTimeInterval: Double = Date().timeIntervalSince1970
+
+    private var reminderTime: Binding<Date> {
+        Binding(
+            get: { Date(timeIntervalSince1970: reminderTimeInterval) },
+            set: { reminderTimeInterval = $0.timeIntervalSince1970 }
+        )
+    }
 
     var body: some View {
         Form {
@@ -169,7 +137,7 @@ struct NotificationSettingsView: View {
                     .disabled(!notificationsEnabled)
 
                 if dailyReminderEnabled {
-                    DatePicker("Reminder Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                    DatePicker("Reminder Time", selection: reminderTime, displayedComponents: .hourAndMinute)
                 }
             }
         }

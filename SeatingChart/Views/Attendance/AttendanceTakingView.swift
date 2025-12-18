@@ -68,6 +68,38 @@ struct AttendanceTakingView: View {
                             attendanceStatus[student.id ?? UUID()] = status
                         }
                     )
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            withAnimation {
+                                attendanceStatus[student.id ?? UUID()] = .present
+                            }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } label: {
+                            Label("Present", systemImage: "checkmark.circle.fill")
+                        }
+                        .tint(.green)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button {
+                            withAnimation {
+                                attendanceStatus[student.id ?? UUID()] = .absent
+                            }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } label: {
+                            Label("Absent", systemImage: "xmark.circle.fill")
+                        }
+                        .tint(.red)
+
+                        Button {
+                            withAnimation {
+                                attendanceStatus[student.id ?? UUID()] = .tardy
+                            }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } label: {
+                            Label("Tardy", systemImage: "clock.fill")
+                        }
+                        .tint(.orange)
+                    }
                 }
             }
 
@@ -188,7 +220,9 @@ struct AttendanceTakingView: View {
             try viewContext.save()
             showingSaveConfirmation = true
         } catch {
+            #if DEBUG
             print("Error saving attendance: \(error.localizedDescription)")
+            #endif
         }
     }
 }

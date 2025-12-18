@@ -2,7 +2,7 @@
 //  PersistenceController.swift
 //  SeatingChart
 //
-//  Created by Claude
+//  Created by GKWazy Software
 //
 
 import CoreData
@@ -72,8 +72,10 @@ class PersistenceController: ObservableObject {
             do {
                 try context.save()
             } catch {
+                #if DEBUG
                 let nsError = error as NSError
                 print("Error saving context: \(nsError), \(nsError.userInfo)")
+                #endif
             }
         }
     }

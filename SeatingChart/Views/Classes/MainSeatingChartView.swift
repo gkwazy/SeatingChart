@@ -4,6 +4,14 @@
 //
 //  Primary view shown when opening a class
 //  Shows seating chart with action buttons at top
+//  Redesigned with Schoolhouse Modern aesthetic
+//
+//  Refactored: Components extracted to separate files:
+//  - ThemedSeatingCanvas.swift
+//  - ThemedDeskView.swift
+//  - ThemedActionPill.swift
+//  - ThemedStudentAssignmentSheet.swift
+//  - LayoutPickerSheet.swift
 //
 
 import SwiftUI
@@ -20,21 +28,33 @@ struct MainSeatingChartView: View {
     @State private var attendanceDate = Date()
     @State private var attendanceStatus: [UUID: AttendanceStatus] = [:]
     @State private var isTakingAttendance = false
-    @State private var showingDatePicker = false
+    @State private var hasTodaysAttendance = false
+    @State private var showingPastAttendanceAlert = false
 
     // Navigation
     @State private var showingRoster = false
     @State private var showingEditLayout = false
-    @State private var showingSaveConfirmation = false
+    @State private var toastMessage: String?
+    @State private var showToast = false
     @State private var showingRandomConfirmation = false
     @State private var showingLayoutPicker = false
+    @State private var showingSeatingRules = false
 
     // Student assignment
     @State private var selectedDesk: Desk?
-    @State private var showingStudentPicker = false
 
-    // Room settings - adaptive to screen size
+    // Haptic feedback - lazily initialized to avoid memory leak
+    private var hapticFeedback: UIImpactFeedbackGenerator {
+        UIImpactFeedbackGenerator(style: .medium)
+    }
+    private var hapticSuccess: UINotificationFeedbackGenerator {
+        UINotificationFeedbackGenerator()
+    }
+
+    // Room settings
     @State private var roomSize = CGSize(width: 1000, height: 800)
+
+    // MARK: - Computed Properties
 
     var activeClassroom: Classroom? {
         (classPeriod.classrooms as? Set<Classroom>)?.first(where: { $0.isActive }) ??
@@ -54,37 +74,47 @@ struct MainSeatingChartView: View {
         }
     }
 
+    // MARK: - Body
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background
-                Color(.systemGroupedBackground)
+                Theme.Colors.ivory
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Top action buttons
                     actionButtonsBar
 
-                    // Main seating chart
                     if let _ = activeClassroom {
-                        AdaptiveSeatingCanvas(
+                        ThemedSeatingCanvas(
                             desks: desks,
                             students: students,
                             isTakingAttendance: isTakingAttendance,
                             attendanceStatus: attendanceStatus,
                             showPhotos: showPhotos,
                             privacyMode: appStateManager.privacyModeEnabled,
+                            hasTodaysAttendance: hasTodaysAttendance,
                             onDeskTap: handleDeskTap,
                             availableSize: CGSize(
                                 width: geometry.size.width,
-                                height: geometry.size.height - 70 // Account for action bar
+                                height: geometry.size.height - 80
                             )
                         )
-                        .clipped() // Prevent desks from drawing over buttons
+                        .clipped()
                     } else {
-                        // No layout created yet
                         noLayoutView
+                            .frame(maxHeight: .infinity)
                     }
+                }
+
+                // Toast overlay
+                if showToast, let message = toastMessage {
+                    VStack {
+                        Spacer()
+                        toastView(message: message)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(Theme.Animation.snappy, value: showToast)
                 }
             }
         }
@@ -92,10 +122,7 @@ struct MainSeatingChartView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Toggle(isOn: $showPhotos) {
-                    Image(systemName: showPhotos ? "photo.fill" : "photo")
-                }
-                .toggleStyle(.button)
+                photoToggleButton
             }
         }
         .sheet(isPresented: $showingRoster) {
@@ -104,7 +131,6 @@ struct MainSeatingChartView: View {
             }
         }
         .sheet(isPresented: $showingEditLayout, onDismiss: {
-            // Reload desks after editing layout
             loadDesks()
         }) {
             if let classroom = activeClassroom {
@@ -117,33 +143,18 @@ struct MainSeatingChartView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingStudentPicker) {
-            if let desk = selectedDesk {
-                StudentAssignmentSheet(
-                    desk: desk,
-                    students: unassignedStudents,
-                    assignedStudent: studentForDesk(desk),
-                    onAssign: { student in
-                        assignStudent(student, to: desk)
-                    },
-                    onUnassign: {
-                        unassignStudent(from: desk)
-                    }
-                )
-            }
-        }
-        .alert("Start Taking Attendance?", isPresented: $showingDatePicker) {
-            Button("Cancel", role: .cancel) { }
-            Button("Start") {
-                startTakingAttendance()
-            }
-        } message: {
-            Text("Mark attendance for \(attendanceDate.formatted(date: .abbreviated, time: .omitted))")
-        }
-        .alert("Attendance Saved", isPresented: $showingSaveConfirmation) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Attendance has been recorded for \(attendanceDate.formatted(date: .abbreviated, time: .omitted))")
+        .sheet(item: $selectedDesk) { desk in
+            ThemedStudentAssignmentSheet(
+                desk: desk,
+                students: unassignedStudents,
+                assignedStudent: studentForDesk(desk),
+                onAssign: { student in
+                    assignStudent(student, to: desk)
+                },
+                onUnassign: {
+                    unassignStudent(from: desk)
+                }
+            )
         }
         .alert("Randomize Seating?", isPresented: $showingRandomConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -166,96 +177,151 @@ struct MainSeatingChartView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingSeatingRules) {
+            SeatingRulesView(classPeriod: classPeriod)
+        }
         .onAppear {
             loadDesks()
             loadTodaysAttendance()
         }
+        .onDisappear {
+            if isTakingAttendance && !attendanceStatus.isEmpty {
+                autoSaveAttendance()
+            }
+        }
+    }
+
+    // MARK: - Photo Toggle Button
+
+    private var photoToggleButton: some View {
+        Button(action: { showPhotos.toggle() }) {
+            HStack(spacing: 4) {
+                Image(systemName: showPhotos ? "photo.fill" : "photo")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(showPhotos ? Theme.Colors.forest : Theme.Colors.slate)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(showPhotos ? Theme.Colors.forest.opacity(0.1) : Theme.Colors.mist)
+            .cornerRadius(Theme.Radius.sm)
+        }
+        .accessibilityLabel(showPhotos ? "Hide photos" : "Show photos")
     }
 
     // MARK: - Action Buttons Bar
 
     private var actionButtonsBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+        HStack {
+            Spacer()
+            HStack(spacing: Theme.Spacing.sm) {
                 if !isTakingAttendance {
-                    ActionButton(
+                    ThemedActionPill(
                         title: "Attendance",
-                        icon: "checkmark.circle",
-                        color: .green,
-                        action: { showingDatePicker = true }
+                        icon: "checkmark.circle.fill",
+                        style: .success,
+                        action: { startTakingAttendance() }
                     )
 
-                    ActionButton(
+                    ThemedActionPill(
                         title: "Random",
                         icon: "shuffle",
-                        color: .blue,
+                        style: .primary,
                         action: { showingRandomConfirmation = true }
                     )
                 } else {
-                    ActionButton(
+                    ThemedActionPill(
                         title: "Save",
-                        icon: "square.and.arrow.down",
-                        color: .blue,
+                        icon: "square.and.arrow.down.fill",
+                        style: .primary,
                         action: saveAttendance
                     )
 
-                    Button(action: { isTakingAttendance = false }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "xmark.circle")
-                                .font(.system(size: 20))
-                            Text("Cancel")
-                                .font(.caption2)
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 70, height: 50)
-                        .background(Color.red)
-                        .cornerRadius(8)
-                    }
+                    ThemedActionPill(
+                        title: "Cancel",
+                        icon: "xmark.circle.fill",
+                        style: .danger,
+                        action: cancelAttendance
+                    )
                 }
-
-                ActionButton(
-                    title: "Roster",
-                    icon: "person.3",
-                    color: .purple,
-                    action: { showingRoster = true }
-                )
-
-                ActionButton(
-                    title: "Layout",
-                    icon: "square.grid.2x2",
-                    color: .gray,
-                    action: { showingLayoutPicker = true }
-                )
             }
-            .padding(.horizontal)
+            Spacer()
         }
-        .padding(.vertical, 10)
-        .background(Color(.systemBackground))
+        .padding(.vertical, Theme.Spacing.md)
+        .background(
+            Color.white
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+        )
     }
 
+    // MARK: - No Layout View
+
     private var noLayoutView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "square.grid.3x3.slash")
-                .font(.system(size: 64))
-                .foregroundColor(.secondary)
+        VStack(spacing: Theme.Spacing.lg) {
+            ZStack {
+                Circle()
+                    .fill(Theme.Colors.amberLight)
+                    .frame(width: 100, height: 100)
 
-            Text("No Layout Created")
-                .font(.title2)
-                .fontWeight(.semibold)
+                Image(systemName: "square.grid.3x3.slash")
+                    .font(.system(size: 40, weight: .medium))
+                    .foregroundColor(Theme.Colors.amber)
+            }
 
-            Text("Create a classroom layout to get started")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            VStack(spacing: Theme.Spacing.xs) {
+                Text("No Layout Created")
+                    .font(Theme.Typography.display(24, weight: .semibold))
+                    .foregroundColor(Theme.Colors.charcoal)
+
+                Text("Create a classroom layout to get started")
+                    .font(Theme.Typography.body(15))
+                    .foregroundColor(Theme.Colors.slate)
+            }
 
             Button(action: { showingEditLayout = true }) {
-                Label("Create Layout", systemImage: "plus.circle.fill")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding()
-                    .background(Color.blue)
-                    .cornerRadius(12)
+                HStack(spacing: Theme.Spacing.xs) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Create Layout")
+                        .font(Theme.Typography.headline(16, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.vertical, Theme.Spacing.sm)
+                .background(
+                    LinearGradient(
+                        colors: [Theme.Colors.forest, Theme.Colors.forestLight],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(Theme.Radius.md)
+                .themeShadow(Theme.Shadows.forestGlow)
             }
+            .buttonStyle(.plain)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No layout created. Tap to create a classroom layout.")
+    }
+
+    // MARK: - Toast View
+
+    private func toastView(message: String) -> some View {
+        HStack(spacing: Theme.Spacing.xs) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(Theme.Colors.success)
+
+            Text(message)
+                .font(Theme.Typography.headline(14, weight: .medium))
+                .foregroundColor(Theme.Colors.charcoal)
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Color.white)
+        .cornerRadius(Theme.Radius.full)
+        .themeShadow(Theme.Shadows.medium)
+        .padding(.bottom, Theme.Spacing.xxl)
+        .accessibilityLabel(message)
     }
 
     // MARK: - Helper Functions
@@ -285,7 +351,6 @@ struct MainSeatingChartView: View {
 
     private func handleDeskTap(_ desk: Desk) {
         if isTakingAttendance {
-            // Cycle attendance status
             guard let student = studentForDesk(desk),
                   let studentID = student.id else {
                 return
@@ -293,10 +358,11 @@ struct MainSeatingChartView: View {
 
             let currentStatus = attendanceStatus[studentID] ?? .present
             attendanceStatus[studentID] = currentStatus.next
+
+            hapticFeedback.impactOccurred()
         } else {
-            // Student assignment mode
+            hapticFeedback.impactOccurred()
             selectedDesk = desk
-            showingStudentPicker = true
         }
     }
 
@@ -312,20 +378,21 @@ struct MainSeatingChartView: View {
         )
 
         if let records = try? viewContext.fetch(request) {
-            // Load today's attendance status (but don't enter attendance-taking mode)
             attendanceStatus.removeAll()
             for record in records {
                 if let studentId = record.student?.id {
                     attendanceStatus[studentId] = record.attendanceStatus
                 }
             }
+            hasTodaysAttendance = !records.isEmpty
+        } else {
+            hasTodaysAttendance = false
         }
     }
 
     private func startTakingAttendance() {
         isTakingAttendance = true
 
-        // Mark students as present only if they don't already have a status
         for student in students {
             if let id = student.id, attendanceStatus[id] == nil {
                 attendanceStatus[id] = .present
@@ -333,11 +400,15 @@ struct MainSeatingChartView: View {
         }
     }
 
+    private func cancelAttendance() {
+        isTakingAttendance = false
+        loadTodaysAttendance()
+    }
+
     private func saveAttendance() {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: attendanceDate)
 
-        // Create or update records for each student
         for (studentId, status) in attendanceStatus {
             if let student = students.first(where: { $0.id == studentId }) {
                 _ = AttendanceRecord.createOrUpdate(
@@ -352,25 +423,24 @@ struct MainSeatingChartView: View {
 
         do {
             try viewContext.save()
-            isTakingAttendance = false  // Exit attendance mode after saving
-            showingSaveConfirmation = true
+            hapticSuccess.notificationOccurred(.success)
+            isTakingAttendance = false
+            hasTodaysAttendance = true
+            showToast(message: "Attendance saved")
         } catch {
-            print("Error saving attendance: \(error.localizedDescription)")
+            hapticSuccess.notificationOccurred(.error)
+            showToast(message: "Error saving attendance")
         }
     }
-
-    // MARK: - Student Assignment
 
     private func assignStudent(_ student: Student, to desk: Desk) {
         guard let deskIndex = desks.firstIndex(where: { $0.id == desk.id }),
               let studentID = student.id else { return }
 
-        // Remove student from any other desk first
         for i in desks.indices {
             desks[i].assignedStudentIDs.removeAll { $0 == studentID }
         }
 
-        // Assign to selected desk
         desks[deskIndex].assignedStudentIDs.append(studentID)
         saveDesks()
     }
@@ -381,30 +451,195 @@ struct MainSeatingChartView: View {
         saveDesks()
     }
 
+    // MARK: - Randomize Seating
+    // Coordinate System Note: iOS Y increases DOWNWARD
+    // "Front of room" = BOTTOM of screen = HIGH Y values
+    // "Back of room" = TOP of screen = LOW Y values
+    // Front-to-back fill: Sort by Y descending (high Y first)
+
     private func randomizeSeating() {
-        // Clear all assignments
+        let rules = SeatingRule.fetchActiveRules(context: viewContext, classPeriod: classPeriod)
+        let keepApartRules = rules.filter { $0.ruleTypeEnum == .keepApart }
+        let keepTogetherRules = rules.filter { $0.ruleTypeEnum == .keepTogether }
+
+        // Clear all desk assignments
         for i in desks.indices {
             desks[i].assignedStudentIDs.removeAll()
         }
 
-        // Sort desk indices by position: bottom first (highest Y), then left to right (lowest X)
-        let sortedIndices = desks.indices.sorted { i1, i2 in
+        // Sort desks: front (high Y) to back (low Y), left to right
+        let sortedDeskIndices = desks.indices.sorted { i1, i2 in
             if desks[i1].position.y != desks[i2].position.y {
-                return desks[i1].position.y > desks[i2].position.y // Higher Y = bottom = first
+                return desks[i1].position.y > desks[i2].position.y
             }
-            return desks[i1].position.x < desks[i2].position.x // Lower X = left = first
+            return desks[i1].position.x < desks[i2].position.x
         }
 
-        // Shuffle students and assign to desks (front/bottom rows first)
-        var shuffledStudents = students.shuffled()
-        for deskIndex in sortedIndices {
-            guard !shuffledStudents.isEmpty else { break }
-            let student = shuffledStudents.removeFirst()
-            if let studentID = student.id {
-                desks[deskIndex].assignedStudentIDs.append(studentID)
+        var shuffledDeskIndices = sortedDeskIndices.shuffled()
+        let adjacencyMap = buildDeskAdjacencyMap()
+
+        var remainingStudents = students.shuffled()
+        var placedStudentIDs = Set<UUID>()
+
+        // STEP 1: Place keep-together pairs first
+        for rule in keepTogetherRules {
+            guard let studentA = rule.studentA,
+                  let studentB = rule.studentB,
+                  let idA = studentA.id,
+                  let idB = studentB.id,
+                  !placedStudentIDs.contains(idA),
+                  !placedStudentIDs.contains(idB) else { continue }
+
+            for deskIndex in shuffledDeskIndices {
+                guard desks[deskIndex].assignedStudentIDs.isEmpty else { continue }
+                guard canPlaceStudent(studentA, atDesk: deskIndex, adjacencyMap: adjacencyMap, keepApartRules: keepApartRules) else { continue }
+
+                let adjacentDesks = (adjacencyMap[deskIndex] ?? []).shuffled()
+                for adjDeskIndex in adjacentDesks {
+                    guard desks[adjDeskIndex].assignedStudentIDs.isEmpty else { continue }
+                    guard canPlaceStudent(studentB, atDesk: adjDeskIndex, adjacencyMap: adjacencyMap, keepApartRules: keepApartRules) else { continue }
+
+                    desks[deskIndex].assignedStudentIDs.append(idA)
+                    desks[adjDeskIndex].assignedStudentIDs.append(idB)
+                    placedStudentIDs.insert(idA)
+                    placedStudentIDs.insert(idB)
+                    remainingStudents.removeAll { $0.id == idA || $0.id == idB }
+                    break
+                }
+
+                if placedStudentIDs.contains(idA) { break }
             }
         }
+
+        // STEP 2: Place remaining students
+        shuffledDeskIndices = shuffledDeskIndices.shuffled()
+        var attempts = 0
+        let maxAttempts = 100
+
+        while !remainingStudents.isEmpty && attempts < maxAttempts {
+            attempts += 1
+            var madeProgress = false
+
+            for deskIndex in shuffledDeskIndices {
+                guard !remainingStudents.isEmpty else { break }
+                guard desks[deskIndex].assignedStudentIDs.isEmpty else { continue }
+
+                for (studentIndex, student) in remainingStudents.enumerated() {
+                    guard let studentID = student.id else { continue }
+
+                    if canPlaceStudent(student, atDesk: deskIndex, adjacencyMap: adjacencyMap, keepApartRules: keepApartRules) {
+                        desks[deskIndex].assignedStudentIDs.append(studentID)
+                        placedStudentIDs.insert(studentID)
+                        remainingStudents.remove(at: studentIndex)
+                        madeProgress = true
+                        break
+                    }
+                }
+            }
+
+            if !madeProgress && !remainingStudents.isEmpty {
+                // Fallback: place remaining students regardless of constraints
+                for deskIndex in shuffledDeskIndices {
+                    guard !remainingStudents.isEmpty else { break }
+                    guard desks[deskIndex].assignedStudentIDs.isEmpty else { continue }
+
+                    if let student = remainingStudents.first, let studentID = student.id {
+                        desks[deskIndex].assignedStudentIDs.append(studentID)
+                        remainingStudents.removeFirst()
+                    }
+                }
+                break
+            }
+        }
+
         saveDesks()
+        hapticSuccess.notificationOccurred(.success)
+        showToast(message: "Seating randomized")
+    }
+
+    private func buildDeskAdjacencyMap() -> [Int: Set<Int>] {
+        var adjacencyMap: [Int: Set<Int>] = [:]
+        let proximityThreshold: CGFloat = 150
+
+        for i in desks.indices {
+            adjacencyMap[i] = []
+            for j in desks.indices where i != j {
+                let distance = hypot(
+                    desks[i].position.x - desks[j].position.x,
+                    desks[i].position.y - desks[j].position.y
+                )
+                if distance <= proximityThreshold {
+                    adjacencyMap[i]?.insert(j)
+                }
+            }
+        }
+        return adjacencyMap
+    }
+
+    private func canPlaceStudent(
+        _ student: Student,
+        atDesk deskIndex: Int,
+        adjacencyMap: [Int: Set<Int>],
+        keepApartRules: [SeatingRule]
+    ) -> Bool {
+        guard student.id != nil else { return true }
+
+        let adjacentDeskIndices = adjacencyMap[deskIndex] ?? []
+
+        var adjacentStudentIDs = Set<UUID>()
+        for adjIndex in adjacentDeskIndices {
+            for id in desks[adjIndex].assignedStudentIDs {
+                adjacentStudentIDs.insert(id)
+            }
+        }
+
+        for rule in keepApartRules {
+            guard rule.involves(student: student) else { continue }
+
+            if let otherStudent = rule.otherStudent(from: student),
+               let otherID = otherStudent.id,
+               adjacentStudentIDs.contains(otherID) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private func showToast(message: String) {
+        toastMessage = message
+        showToast = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation {
+                showToast = false
+            }
+        }
+    }
+
+    private func autoSaveAttendance() {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: attendanceDate)
+
+        for (studentId, status) in attendanceStatus {
+            if let student = students.first(where: { $0.id == studentId }) {
+                _ = AttendanceRecord.createOrUpdate(
+                    context: viewContext,
+                    student: student,
+                    classPeriod: classPeriod,
+                    date: startOfDay,
+                    status: status
+                )
+            }
+        }
+
+        do {
+            try viewContext.save()
+        } catch {
+            // Silent save on disappear - user can resave if needed
+            #if DEBUG
+            print("Auto-save attendance failed: \(error)")
+            #endif
+        }
     }
 
     private func clearAllAssignments() {
@@ -415,520 +650,35 @@ struct MainSeatingChartView: View {
     }
 
     private func saveDesks() {
-        guard let classroom = activeClassroom,
-              let data = try? JSONEncoder().encode(desks) else { return }
-        classroom.deskPositions = data
-        try? viewContext.save()
+        guard let classroom = activeClassroom else { return }
+
+        do {
+            let data = try JSONEncoder().encode(desks)
+            classroom.deskPositions = data
+            try viewContext.save()
+        } catch {
+            showToast(message: "Failed to save layout")
+            #if DEBUG
+            print("Save desks error: \(error)")
+            #endif
+        }
     }
 
     private func switchToLayout(_ layout: Classroom) {
-        // Deactivate all other layouts for this class
         if let classrooms = classPeriod.classrooms as? Set<Classroom> {
             for classroom in classrooms {
                 classroom.isActive = (classroom == layout)
             }
         }
 
-        try? viewContext.save()
-
-        // Reload desks from the new layout
-        loadDesks()
-    }
-}
-
-// MARK: - Layout Picker Sheet
-
-struct LayoutPickerSheet: View {
-    @Environment(\.managedObjectContext) private var viewContext
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var classPeriod: ClassPeriod
-    let currentLayout: Classroom?
-    let onSelectLayout: (Classroom) -> Void
-    let onEditLayout: () -> Void
-
-    @State private var showingCreateFlow = false
-    @State private var showingEditFlow = false
-
-    var layouts: [Classroom] {
-        let classrooms = classPeriod.classrooms as? Set<Classroom> ?? []
-        return classrooms.sorted { ($0.name ?? "") < ($1.name ?? "") }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(layouts, id: \.id) { layout in
-                        Button {
-                            onSelectLayout(layout)
-                            dismiss()
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(layout.name ?? "Unnamed Layout")
-                                        .foregroundColor(.primary)
-
-                                    if let deskData = layout.deskPositions,
-                                       let deskCount = try? JSONDecoder().decode([Desk].self, from: deskData).count {
-                                        Text("\(deskCount) desks")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-
-                                Spacer()
-
-                                if layout == currentLayout {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                }
-                            }
-                        }
-                    }
-                    .onDelete(perform: deleteLayouts)
-                } header: {
-                    Text("Saved Layouts")
-                }
-
-                Section {
-                    Button {
-                        showingCreateFlow = true
-                    } label: {
-                        Label("Create New Layout", systemImage: "plus.circle")
-                    }
-
-                    if currentLayout != nil {
-                        Button {
-                            showingEditFlow = true
-                        } label: {
-                            Label("Edit Current Layout", systemImage: "pencil")
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Layouts")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-            .fullScreenCover(isPresented: $showingCreateFlow) {
-                CreateLayoutFlowView(classPeriod: classPeriod, isPresented: $showingCreateFlow)
-            }
-            .fullScreenCover(isPresented: $showingEditFlow) {
-                if let layout = currentLayout {
-                    EditLayoutFlowView(classroom: layout, isPresented: $showingEditFlow)
-                }
-            }
-        }
-    }
-
-    private func deleteLayouts(offsets: IndexSet) {
-        for index in offsets {
-            let layout = layouts[index]
-            // Don't delete the active layout
-            if layout != currentLayout {
-                viewContext.delete(layout)
-            }
-        }
-        try? viewContext.save()
-    }
-}
-
-// MARK: - Student Picker Sheet
-
-struct StudentAssignmentSheet: View {
-    let desk: Desk
-    let students: [Student]
-    let assignedStudent: Student?
-    let onAssign: (Student) -> Void
-    let onUnassign: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if assignedStudent != nil {
-                    Section {
-                        Button(role: .destructive) {
-                            onUnassign()
-                            dismiss()
-                        } label: {
-                            Label("Remove from Desk", systemImage: "person.badge.minus")
-                        }
-                    }
-                }
-
-                Section(students.isEmpty ? "No Unassigned Students" : "Assign Student") {
-                    ForEach(students) { student in
-                        Button {
-                            onAssign(student)
-                            dismiss()
-                        } label: {
-                            HStack(spacing: 12) {
-                                if let photoData = student.photoData,
-                                   let uiImage = UIImage(data: photoData) {
-                                    Image(uiImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 40, height: 40)
-                                        .clipShape(Circle())
-                                } else {
-                                    Image(systemName: "person.circle.fill")
-                                        .resizable()
-                                        .frame(width: 40, height: 40)
-                                        .foregroundColor(.gray)
-                                }
-
-                                VStack(alignment: .leading) {
-                                    Text("\(student.firstName ?? "") \(student.lastName ?? "")")
-                                        .foregroundColor(.primary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle(assignedStudent != nil ? "Change Assignment" : "Assign Student")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Desk Display View
-
-struct DeskDisplayView: View {
-    let desk: Desk
-    let student: Student?
-    let status: AttendanceStatus?
-    let showPhoto: Bool
-    let privacyMode: Bool
-
-    var backgroundColor: Color {
-        if let status = status {
-            return status.color.opacity(0.3)
-        }
-        return Color.gray.opacity(0.15)
-    }
-
-    var borderColor: Color {
-        if let status = status {
-            return status.color
-        }
-        return Color.gray.opacity(0.4)
-    }
-
-    var body: some View {
-        ZStack {
-            // Desk background
-            if student != nil {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(backgroundColor)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(borderColor, lineWidth: status != nil ? 3 : 2)
-                    )
-            } else {
-                // Empty desk
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                    )
-            }
-
-            // Front indicator bar (at bottom of desk - front of classroom)
-            VStack {
-                Spacer()
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.blue.opacity(0.6))
-                    .frame(width: desk.size.width * 0.6, height: 4)
-                    .padding(.bottom, 4)
-            }
-
-            // Student info
-            if let student = student {
-                VStack(spacing: 4) {
-                    // Photo
-                    if showPhoto {
-                        if let photoData = student.photoData, let uiImage = UIImage(data: photoData) {
-                            Image(uiImage: privacyMode ? (PhotoManager.shared.blurImage(uiImage) ?? uiImage) : uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 40, height: 40)
-                                .clipShape(Circle())
-                        } else {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .frame(width: 40, height: 40)
-                                .foregroundColor(.gray)
-                        }
-                    }
-
-                    // Name
-                    Text(student.name ?? "Unknown")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                    // Status label (only when taking attendance)
-                    if let status = status {
-                        Text(status.displayName)
-                            .font(.system(size: 10))
-                            .fontWeight(.semibold)
-                            .foregroundColor(status.color)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.white)
-                            .cornerRadius(4)
-                    }
-                }
-                .padding(8)
-            } else {
-                // Empty desk - show tap to assign hint
-                VStack(spacing: 4) {
-                    Image(systemName: "plus.circle")
-                        .font(.title2)
-                        .foregroundColor(.gray.opacity(0.5))
-                    Text("Tap to assign")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-            }
-        }
-        .frame(width: desk.size.width, height: desk.size.height)
-        .contentShape(Rectangle()) // Ensures entire desk area is tappable
-        .rotationEffect(desk.rotation)
-    }
-}
-
-// MARK: - Adaptive Seating Canvas
-
-struct AdaptiveSeatingCanvas: View {
-    let desks: [Desk]
-    let students: [Student]
-    let isTakingAttendance: Bool
-    let attendanceStatus: [UUID: AttendanceStatus]
-    let showPhotos: Bool
-    let privacyMode: Bool
-    let onDeskTap: (Desk) -> Void
-    let availableSize: CGSize
-
-    // Padding between desks (multiplier for spacing)
-    private let deskPadding: CGFloat = 1.15
-
-    // Zoom gesture state
-    @State private var currentZoom: CGFloat = 1.0
-    @State private var lastZoom: CGFloat = 1.0
-
-    // Pan gesture state
-    @State private var currentOffset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-
-    // Zoom limits
-    private let maxZoom: CGFloat = 3.0
-
-    // Calculate minimum zoom to prevent desks from becoming too small
-    private var minZoom: CGFloat {
-        // The minimum zoom ensures desks stay at least 50pt in their smallest dimension
-        // Since initialScale already fits content to screen, we just need to prevent
-        // zooming out too far from that baseline
-        return 0.7
-    }
-
-    // Calculate the bounding box of all desks with spread positioning
-    private var desksBounds: CGRect {
-        guard !desks.isEmpty else {
-            return CGRect(x: 0, y: 0, width: 400, height: 300)
-        }
-
-        // Need to calculate center first for spread positions
-        let sumX = desks.reduce(0) { $0 + $1.position.x }
-        let sumY = desks.reduce(0) { $0 + $1.position.y }
-        let center = CGPoint(x: sumX / CGFloat(desks.count), y: sumY / CGFloat(desks.count))
-
-        var minX = CGFloat.greatestFiniteMagnitude
-        var minY = CGFloat.greatestFiniteMagnitude
-        var maxX = -CGFloat.greatestFiniteMagnitude
-        var maxY = -CGFloat.greatestFiniteMagnitude
-
-        for desk in desks {
-            // Calculate spread position
-            let spreadX = center.x + (desk.position.x - center.x) * deskPadding
-            let spreadY = center.y + (desk.position.y - center.y) * deskPadding
-
-            minX = min(minX, spreadX - desk.size.width / 2)
-            minY = min(minY, spreadY - desk.size.height / 2)
-            maxX = max(maxX, spreadX + desk.size.width / 2)
-            maxY = max(maxY, spreadY + desk.size.height / 2)
-        }
-
-        // Add edge padding
-        let edgePadding: CGFloat = 60
-        return CGRect(
-            x: minX - edgePadding,
-            y: minY - edgePadding,
-            width: maxX - minX + edgePadding * 2,
-            height: maxY - minY + edgePadding * 2
-        )
-    }
-
-    // Calculate initial scale to fit content
-    private var initialScale: CGFloat {
-        let bounds = desksBounds
-        guard bounds.width > 0 && bounds.height > 0 else { return 1.0 }
-
-        let scaleX = availableSize.width / bounds.width
-        let scaleY = availableSize.height / bounds.height
-        let scale = min(scaleX, scaleY) * 0.9 // 90% to add some margin
-        return max(min(scale, 1.5), 0.3)
-    }
-
-    // Combined scale (initial + user zoom)
-    private var totalScale: CGFloat {
-        initialScale * currentZoom
-    }
-
-    // Center point of all desks
-    private var desksCenter: CGPoint {
-        guard !desks.isEmpty else { return .zero }
-        let sumX = desks.reduce(0) { $0 + $1.position.x }
-        let sumY = desks.reduce(0) { $0 + $1.position.y }
-        return CGPoint(x: sumX / CGFloat(desks.count), y: sumY / CGFloat(desks.count))
-    }
-
-    // Calculate spread-out position for a desk (adds spacing between desks)
-    private func spreadPosition(for desk: Desk) -> CGPoint {
-        let center = desksCenter
-        // Spread positions outward from center
-        let spreadX = center.x + (desk.position.x - center.x) * deskPadding
-        let spreadY = center.y + (desk.position.y - center.y) * deskPadding
-        return CGPoint(x: spreadX, y: spreadY)
-    }
-
-    // Offset to center content
-    private var centerOffset: CGSize {
-        let bounds = desksBounds
-        return CGSize(
-            width: availableSize.width / 2 - bounds.midX * totalScale,
-            height: availableSize.height / 2 - bounds.midY * totalScale
-        )
-    }
-
-    private func studentForDesk(_ desk: Desk) -> Student? {
-        guard let studentID = desk.assignedStudentIDs.first else { return nil }
-        return students.first(where: { $0.id == studentID })
-    }
-
-    private func statusForDesk(_ desk: Desk) -> AttendanceStatus? {
-        guard let student = studentForDesk(desk),
-              let studentID = student.id else {
-            return nil
-        }
-        // Return status if we have attendance data (either taking attendance or viewing saved data)
-        return attendanceStatus[studentID]
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Background for gestures
-                Color(.systemGroupedBackground)
-
-                // Desks container
-                ZStack {
-                    ForEach(desks) { desk in
-                        let spreadPos = spreadPosition(for: desk)
-                        DeskDisplayView(
-                            desk: desk,
-                            student: studentForDesk(desk),
-                            status: statusForDesk(desk),
-                            showPhoto: showPhotos,
-                            privacyMode: privacyMode
-                        )
-                        .position(
-                            x: spreadPos.x * totalScale + centerOffset.width + currentOffset.width,
-                            y: spreadPos.y * totalScale + centerOffset.height + currentOffset.height
-                        )
-                        .scaleEffect(totalScale)
-                        .onTapGesture {
-                            onDeskTap(desk)
-                        }
-                    }
-                }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .contentShape(Rectangle())
-            .gesture(
-                MagnificationGesture()
-                    .onChanged { value in
-                        let delta = value / lastZoom
-                        lastZoom = value
-                        let newZoom = currentZoom * delta
-                        currentZoom = min(max(newZoom, minZoom), maxZoom)
-                    }
-                    .onEnded { _ in
-                        lastZoom = 1.0
-                    }
-            )
-            .simultaneousGesture(
-                DragGesture()
-                    .onChanged { value in
-                        currentOffset = CGSize(
-                            width: lastOffset.width + value.translation.width,
-                            height: lastOffset.height + value.translation.height
-                        )
-                    }
-                    .onEnded { _ in
-                        lastOffset = currentOffset
-                    }
-            )
-            .onTapGesture(count: 2) {
-                // Double-tap to reset zoom
-                withAnimation(.spring(response: 0.3)) {
-                    currentZoom = 1.0
-                    lastZoom = 1.0
-                    currentOffset = .zero
-                    lastOffset = .zero
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Action Button
-
-struct ActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                Text(title)
-                    .font(.caption2)
-            }
-            .foregroundColor(.white)
-            .frame(width: 70, height: 50)
-            .background(color)
-            .cornerRadius(8)
+        do {
+            try viewContext.save()
+            loadDesks()
+        } catch {
+            showToast(message: "Failed to switch layout")
+            #if DEBUG
+            print("Switch layout error: \(error)")
+            #endif
         }
     }
 }

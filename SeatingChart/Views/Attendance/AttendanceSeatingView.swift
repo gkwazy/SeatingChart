@@ -232,7 +232,9 @@ struct AttendanceSeatingView: View {
             try viewContext.save()
             showingSaveConfirmation = true
         } catch {
+            #if DEBUG
             print("Error saving attendance: \(error.localizedDescription)")
+            #endif
         }
     }
 }

@@ -2,7 +2,7 @@
 //  Student+Extensions.swift
 //  SeatingChart
 //
-//  Created by Claude
+//  Created by GKWazy Software
 //
 
 import Foundation
@@ -36,6 +36,21 @@ extension Student {
         set {
             photoData = newValue?.jpegData(compressionQuality: 0.7)
         }
+    }
+
+    /// Returns the student's initials (e.g., "JD" for "John Doe")
+    var initials: String? {
+        var result = ""
+        if let first = firstName?.first {
+            result.append(first)
+        }
+        if let last = lastName?.first {
+            result.append(last)
+        }
+        if result.isEmpty, let fullName = name?.first {
+            result.append(fullName)
+        }
+        return result.isEmpty ? nil : result.uppercased()
     }
 
     convenience init(context: NSManagedObjectContext, name: String, photo: UIImage? = nil) {

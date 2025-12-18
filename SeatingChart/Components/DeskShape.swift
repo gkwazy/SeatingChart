@@ -2,7 +2,7 @@
 //  DeskShape.swift
 //  SeatingChart
 //
-//  Created by Claude
+//  Refined with Schoolhouse Modern aesthetic
 //
 
 import SwiftUI
@@ -14,6 +14,7 @@ struct DeskShape: View {
     let showStudents: Bool
     let showNames: Bool
     let privacyMode: Bool
+    var attendanceStatus: AttendanceStatus?
 
     init(
         desk: Desk,
@@ -21,7 +22,8 @@ struct DeskShape: View {
         isSelected: Bool = false,
         showStudents: Bool = true,
         showNames: Bool = true,
-        privacyMode: Bool = false
+        privacyMode: Bool = false,
+        attendanceStatus: AttendanceStatus? = nil
     ) {
         self.desk = desk
         self.students = students
@@ -29,6 +31,17 @@ struct DeskShape: View {
         self.showStudents = showStudents
         self.showNames = showNames
         self.privacyMode = privacyMode
+        self.attendanceStatus = attendanceStatus
+    }
+
+    private var deskStyle: ThemeDeskStyle {
+        if isSelected {
+            return ThemeDeskStyle.selected()
+        } else if let status = attendanceStatus {
+            return ThemeDeskStyle.attendance(status)
+        } else {
+            return ThemeDeskStyle.standard(occupied: desk.isOccupied)
+        }
     }
 
     var body: some View {
@@ -49,83 +62,61 @@ struct DeskShape: View {
 
     @ViewBuilder
     private var deskBackground: some View {
+        let cornerRadius: CGFloat = desk.type == .square ? 6 : 8
+
         Group {
             switch desk.type {
             case .rectangle, .longRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(backgroundColor)
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(deskStyle.backgroundColor)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(borderColor, lineWidth: isSelected ? 3 : 2)
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .strokeBorder(deskStyle.borderColor, lineWidth: isSelected ? 3 : 2)
                     )
 
             case .square:
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(backgroundColor)
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(deskStyle.backgroundColor)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(borderColor, lineWidth: isSelected ? 3 : 2)
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .strokeBorder(deskStyle.borderColor, lineWidth: isSelected ? 3 : 2)
                     )
 
             case .trapezoid:
                 TrapezoidShape()
-                    .fill(backgroundColor)
+                    .fill(deskStyle.backgroundColor)
                     .overlay(
                         TrapezoidShape()
-                            .strokeBorder(borderColor, lineWidth: isSelected ? 3 : 2)
+                            .strokeBorder(deskStyle.borderColor, lineWidth: isSelected ? 3 : 2)
                     )
 
             case .circle:
                 Circle()
-                    .fill(backgroundColor)
+                    .fill(deskStyle.backgroundColor)
                     .overlay(
                         Circle()
-                            .strokeBorder(borderColor, lineWidth: isSelected ? 3 : 2)
+                            .strokeBorder(deskStyle.borderColor, lineWidth: isSelected ? 3 : 2)
                     )
             }
         }
         .shadow(
-            color: shadowColor,
+            color: deskStyle.shadowColor,
             radius: isSelected ? 8 : 4,
             x: 0,
             y: isSelected ? 4 : 2
         )
     }
 
-    private var backgroundColor: Color {
-        if isSelected {
-            return Color.blue.opacity(0.2)
-        } else if desk.isOccupied {
-            return Color(.systemBackground)
-        } else {
-            return Color(.systemGray6)
-        }
-    }
-
-    private var borderColor: Color {
-        if isSelected {
-            return .blue
-        } else if desk.isOccupied {
-            return Color(.systemGray3)
-        } else {
-            return Color(.systemGray4)
-        }
-    }
-
-    private var shadowColor: Color {
-        isSelected ? Color.blue.opacity(0.3) : Color.black.opacity(0.15)
-    }
-
     @ViewBuilder
     private var studentContent: some View {
         if desk.type == .longRectangle {
             // Long table layout - multiple students in a row
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Spacing.xs) {
                 ForEach(students) { student in
                     studentView(for: student)
                 }
             }
-            .padding(8)
+            .padding(Theme.Spacing.xs)
         } else if desk.type == .circle && students.count > 1 {
             // Circle table - arrange around
             ZStack {
@@ -144,42 +135,83 @@ struct DeskShape: View {
 
     @ViewBuilder
     private func studentView(for student: Student) -> some View {
-        VStack(spacing: 4) {
-            if let photoData = student.photoData, let uiImage = UIImage(data: photoData) {
-                Image(uiImage: privacyMode ? (PhotoManager.shared.blurImage(uiImage) ?? uiImage) : uiImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 32, height: 32)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
-            } else {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .frame(width: 32, height: 32)
-                    .foregroundColor(.gray)
-            }
+        VStack(spacing: 3) {
+            // Photo or initials placeholder
+            studentPhoto(for: student)
 
+            // Name label
             if showNames && !privacyMode {
                 if let firstName = student.firstName {
                     Text(firstName)
-                        .font(.system(size: 9))
-                        .fontWeight(.semibold)
+                        .font(Theme.Typography.caption(9, weight: .semibold))
+                        .foregroundColor(Theme.Colors.charcoal)
                         .lineLimit(1)
                 }
             }
         }
     }
 
+    @ViewBuilder
+    private func studentPhoto(for student: Student) -> some View {
+        if let photoData = student.photoData, let uiImage = UIImage(data: photoData) {
+            Image(uiImage: privacyMode ? (PhotoManager.shared.blurImage(uiImage) ?? uiImage) : uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: Constants.PhotoSize.deskThumbnail, height: Constants.PhotoSize.deskThumbnail)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: 2)
+                )
+                .themeShadow(Theme.Shadows.subtle)
+        } else {
+            // Initials placeholder
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: placeholderGradient(for: student),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Text(student.initials ?? "?")
+                    .font(Theme.Typography.headline(14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .frame(width: Constants.PhotoSize.deskThumbnail, height: Constants.PhotoSize.deskThumbnail)
+            .overlay(
+                Circle()
+                    .stroke(Color.white, lineWidth: 2)
+            )
+            .themeShadow(Theme.Shadows.subtle)
+        }
+    }
+
+    private func placeholderGradient(for student: Student) -> [Color] {
+        let name = student.name ?? "Unknown"
+        let hash = abs(name.hashValue)
+        let colorPairs: [[Color]] = [
+            [Theme.Colors.forest, Theme.Colors.forestLight],
+            [Theme.Colors.amber, Theme.Colors.terracotta],
+            [Theme.Colors.forestMuted, Theme.Colors.forest],
+            [Theme.Colors.terracotta, Theme.Colors.amber],
+            [Theme.Colors.slate, Theme.Colors.charcoal]
+        ]
+        return colorPairs[hash % colorPairs.count]
+    }
+
     private var emptyDeskIcon: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             Image(systemName: "studentdesk")
-                .font(.system(size: desk.size.width / 3))
-                .foregroundColor(.gray.opacity(0.4))
+                .font(.system(size: desk.size.width / 3.5, weight: .light))
+                .foregroundColor(Theme.Colors.stone)
 
             if desk.capacity > 1 {
                 Text("\(desk.capacity) seats")
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
+                    .font(Theme.Typography.caption(8))
+                    .foregroundColor(Theme.Colors.slate)
             }
         }
     }

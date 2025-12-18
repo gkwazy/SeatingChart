@@ -16,7 +16,18 @@
         <relationship name="classroom" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Classroom" inverseName="classes" inverseEntity="Classroom"/>
         <relationship name="classrooms" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Classroom" inverseName="classPeriods" inverseEntity="Classroom"/>
         <relationship name="seatAssignments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatAssignment" inverseName="classPeriod" inverseEntity="SeatAssignment"/>
+        <relationship name="seatingRules" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatingRule" inverseName="classPeriod" inverseEntity="SeatingRule"/>
         <relationship name="students" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Student" inverseName="classPeriod" inverseEntity="Student"/>
+    </entity>
+    <entity name="SeatingRule" representedClassName="SeatingRule" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isActive" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="ruleType" optional="YES" attributeType="String" defaultValueString="keep_apart"/>
+        <relationship name="classPeriod" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ClassPeriod" inverseName="seatingRules" inverseEntity="ClassPeriod"/>
+        <relationship name="studentA" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Student" inverseName="rulesAsStudentA" inverseEntity="Student"/>
+        <relationship name="studentB" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Student" inverseName="rulesAsStudentB" inverseEntity="Student"/>
     </entity>
     <entity name="Classroom" representedClassName="Classroom" syncable="YES" codeGenerationType="class">
         <attribute name="columns" optional="NO" attributeType="Integer 16" defaultValueString="8" usesScalarValueType="YES"/>
@@ -53,6 +64,8 @@
         <attribute name="studentID" optional="YES" attributeType="String"/>
         <relationship name="attendanceRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AttendanceRecord" inverseName="student" inverseEntity="AttendanceRecord"/>
         <relationship name="classPeriod" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ClassPeriod" inverseName="students" inverseEntity="ClassPeriod"/>
+        <relationship name="rulesAsStudentA" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatingRule" inverseName="studentA" inverseEntity="SeatingRule"/>
+        <relationship name="rulesAsStudentB" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatingRule" inverseName="studentB" inverseEntity="SeatingRule"/>
         <relationship name="seatAssignments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SeatAssignment" inverseName="student" inverseEntity="SeatAssignment"/>
     </entity>
 </model>

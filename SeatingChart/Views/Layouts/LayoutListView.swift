@@ -71,7 +71,9 @@ struct LayoutListView: View {
             do {
                 try viewContext.save()
             } catch {
+                #if DEBUG
                 print("Error deleting layout: \(error.localizedDescription)")
+                #endif
             }
         }
     }
@@ -145,16 +147,13 @@ struct CreateLayoutFlowView: View {
                     configurationStepView
                 }
             }
+            // Issue 2: Removed duplicate Done button - EnhancedLayoutEditorView has its own toolbar
             .navigationDestination(isPresented: $navigateToEditor) {
                 if let classroom = createdClassroom {
                     EnhancedLayoutEditorView(classroom: classroom)
-                        .navigationBarBackButtonHidden(true)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Done") {
-                                    isPresented = false
-                                }
-                            }
+                        .onDisappear {
+                            // Auto-close the flow when editor is dismissed
+                            isPresented = false
                         }
                 }
             }
@@ -236,7 +235,7 @@ struct CreateLayoutFlowView: View {
         Form {
             // Total desks - "the law"
             Section(header: Text("Total Desks")) {
-                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...1000)
+                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...500)
                 Text("This is the maximum number of desks that will be created")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -274,8 +273,8 @@ struct CreateLayoutFlowView: View {
         switch template {
         case .traditionalRows:
             Section(header: Text("Grid Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...100)
-                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...100)
+                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...50)
+                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...50)
                 Text("Grid capacity: \(config.rows * config.columns) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -283,8 +282,8 @@ struct CreateLayoutFlowView: View {
 
         case .pairs:
             Section(header: Text("Pairs Layout")) {
-                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...50)
-                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...50)
+                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...25)
+                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...25)
                 Text("Capacity: \(config.pairColumns * config.pairRows * 2) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -292,7 +291,7 @@ struct CreateLayoutFlowView: View {
 
         case .groups:
             Section(header: Text("Group Layout")) {
-                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...200)
+                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...100)
                 NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...20)
                 Text("Capacity: \(config.numberOfGroups * config.desksPerGroup) desks")
                     .font(.caption)
@@ -301,8 +300,8 @@ struct CreateLayoutFlowView: View {
 
         case .uShape:
             Section(header: Text("U-Shape Layout")) {
-                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 1...100)
-                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...100)
+                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 1...50)
+                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...50)
                 Text("Capacity: \(config.uShapeTotalSeats) desks")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -310,7 +309,7 @@ struct CreateLayoutFlowView: View {
 
         case .labStations:
             Section(header: Text("Lab Stations")) {
-                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...200)
+                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...100)
                 NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...20)
                 Text("Each station is a round table")
                     .font(.caption)
@@ -319,11 +318,47 @@ struct CreateLayoutFlowView: View {
 
         case .choirLoft:
             Section(header: Text("Choir Loft Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 1...100)
-                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 1...100)
+                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 1...50)
+                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 1...50)
                 Text("Seats are staggered in alternating rows")
                     .font(.caption)
                     .foregroundColor(.blue)
+            }
+
+        case .computerLab:
+            Section(header: Text("Computer Lab (Perimeter)")) {
+                NumberInputStepper(label: "Top Wall Desks", value: $config.perimeterTopCount, range: 1...15)
+                NumberInputStepper(label: "Bottom Wall Desks", value: $config.perimeterBottomCount, range: 1...15)
+                NumberInputStepper(label: "Side Wall Desks (each)", value: $config.perimeterSideCount, range: 1...10)
+                Text("Capacity: \(config.perimeterTotalSeats) desks")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+        case .seminar:
+            Section(header: Text("Seminar Table")) {
+                NumberInputStepper(label: "Table Length", value: $config.seminarTableLength, range: 4...20)
+                Text("Long tables arranged for discussion")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+        case .theater:
+            Section(header: Text("Theater Style")) {
+                NumberInputStepper(label: "Rows", value: $config.theaterRows, range: 2...12)
+                NumberInputStepper(label: "Seats per Row", value: $config.theaterColumnsPerRow, range: 4...16)
+                Text("Curved rows like a theater")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+        case .collaborativePods:
+            Section(header: Text("Collaborative Pods")) {
+                NumberInputStepper(label: "Number of Pods", value: $config.podCount, range: 2...10)
+                NumberInputStepper(label: "Desks per Pod", value: $config.desksPerPod, range: 4...8)
+                Text("Circular clusters for group work")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
         case .empty:
@@ -392,6 +427,14 @@ struct CreateLayoutFlowView: View {
                 total += row % 2 == 1 ? config.choirColumns - 1 : config.choirColumns
             }
             return total
+        case .computerLab:
+            return config.perimeterTotalSeats
+        case .seminar:
+            return config.seminarTableLength
+        case .theater:
+            return config.theaterRows * config.theaterColumnsPerRow
+        case .collaborativePods:
+            return config.podCount * config.desksPerPod
         case .empty:
             return 0
         }
@@ -419,6 +462,18 @@ struct CreateLayoutFlowView: View {
         case .choirLoft:
             config.choirRows = 4
             config.choirColumns = 8
+        case .computerLab:
+            config.perimeterTopCount = 6
+            config.perimeterBottomCount = 6
+            config.perimeterSideCount = 4
+        case .seminar:
+            config.seminarTableLength = 8
+        case .theater:
+            config.theaterRows = 5
+            config.theaterColumnsPerRow = 8
+        case .collaborativePods:
+            config.podCount = 4
+            config.desksPerPod = 6
         case .empty:
             break
         }
@@ -451,7 +506,9 @@ struct CreateLayoutFlowView: View {
             createdClassroom = classroom
             navigateToEditor = true
         } catch {
+            #if DEBUG
             print("Error saving layout: \(error.localizedDescription)")
+            #endif
         }
     }
 }
@@ -491,15 +548,12 @@ struct EditLayoutFlowView: View {
                     configurationStepView
                 }
             }
+            // Issue 2: Removed duplicate Done button - EnhancedLayoutEditorView has its own toolbar
             .navigationDestination(isPresented: $navigateToEditor) {
                 EnhancedLayoutEditorView(classroom: classroom)
-                    .navigationBarBackButtonHidden(true)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("Done") {
-                                isPresented = false
-                            }
-                        }
+                    .onDisappear {
+                        // Auto-close the flow when editor is dismissed
+                        isPresented = false
                     }
             }
         }
@@ -665,7 +719,7 @@ struct EditLayoutFlowView: View {
     private var configurationStepView: some View {
         Form {
             Section(header: Text("Total Desks")) {
-                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...1000)
+                NumberInputStepper(label: "Number of Desks", value: $config.totalDesks, range: 1...500)
                 Text("This is the maximum number of desks that will be created")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -701,38 +755,62 @@ struct EditLayoutFlowView: View {
         switch template {
         case .traditionalRows:
             Section(header: Text("Grid Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...100)
-                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...100)
+                NumberInputStepper(label: "Rows", value: $config.rows, range: 1...50)
+                NumberInputStepper(label: "Columns", value: $config.columns, range: 1...50)
             }
 
         case .pairs:
             Section(header: Text("Pairs Layout")) {
-                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...50)
-                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...50)
+                NumberInputStepper(label: "Pair Columns", value: $config.pairColumns, range: 1...25)
+                NumberInputStepper(label: "Rows of Pairs", value: $config.pairRows, range: 1...25)
             }
 
         case .groups:
             Section(header: Text("Group Layout")) {
-                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...200)
+                NumberInputStepper(label: "Number of Groups", value: $config.numberOfGroups, range: 1...100)
                 NumberInputStepper(label: "Desks per Group", value: $config.desksPerGroup, range: 2...20)
             }
 
         case .uShape:
             Section(header: Text("U-Shape Layout")) {
-                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 1...100)
-                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...100)
+                NumberInputStepper(label: "Top Seats", value: $config.uShapeTopCount, range: 1...50)
+                NumberInputStepper(label: "Side Seats (each)", value: $config.uShapeSideCount, range: 1...50)
             }
 
         case .labStations:
             Section(header: Text("Lab Stations")) {
-                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...200)
+                NumberInputStepper(label: "Number of Stations", value: $config.numberOfStations, range: 1...100)
                 NumberInputStepper(label: "Seats per Station", value: $config.seatsPerStation, range: 2...20)
             }
 
         case .choirLoft:
             Section(header: Text("Choir Loft Layout")) {
-                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 1...100)
-                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 1...100)
+                NumberInputStepper(label: "Rows", value: $config.choirRows, range: 1...50)
+                NumberInputStepper(label: "Columns", value: $config.choirColumns, range: 1...50)
+            }
+
+        case .computerLab:
+            Section(header: Text("Computer Lab (Perimeter)")) {
+                NumberInputStepper(label: "Top Wall Desks", value: $config.perimeterTopCount, range: 1...15)
+                NumberInputStepper(label: "Bottom Wall Desks", value: $config.perimeterBottomCount, range: 1...15)
+                NumberInputStepper(label: "Side Wall Desks (each)", value: $config.perimeterSideCount, range: 1...10)
+            }
+
+        case .seminar:
+            Section(header: Text("Seminar Table")) {
+                NumberInputStepper(label: "Table Length", value: $config.seminarTableLength, range: 4...20)
+            }
+
+        case .theater:
+            Section(header: Text("Theater Style")) {
+                NumberInputStepper(label: "Rows", value: $config.theaterRows, range: 2...12)
+                NumberInputStepper(label: "Seats per Row", value: $config.theaterColumnsPerRow, range: 4...16)
+            }
+
+        case .collaborativePods:
+            Section(header: Text("Collaborative Pods")) {
+                NumberInputStepper(label: "Number of Pods", value: $config.podCount, range: 2...10)
+                NumberInputStepper(label: "Desks per Pod", value: $config.desksPerPod, range: 4...8)
             }
 
         case .empty:
@@ -796,6 +874,10 @@ struct EditLayoutFlowView: View {
                 total += row % 2 == 1 ? config.choirColumns - 1 : config.choirColumns
             }
             return total
+        case .computerLab: return config.perimeterTotalSeats
+        case .seminar: return config.seminarTableLength
+        case .theater: return config.theaterRows * config.theaterColumnsPerRow
+        case .collaborativePods: return config.podCount * config.desksPerPod
         case .empty: return 0
         }
     }
@@ -822,6 +904,18 @@ struct EditLayoutFlowView: View {
         case .choirLoft:
             config.choirRows = 4
             config.choirColumns = 8
+        case .computerLab:
+            config.perimeterTopCount = 6
+            config.perimeterBottomCount = 6
+            config.perimeterSideCount = 4
+        case .seminar:
+            config.seminarTableLength = 8
+        case .theater:
+            config.theaterRows = 5
+            config.theaterColumnsPerRow = 8
+        case .collaborativePods:
+            config.podCount = 4
+            config.desksPerPod = 6
         case .empty:
             break
         }
@@ -850,7 +944,9 @@ struct EditLayoutFlowView: View {
             try viewContext.save()
             navigateToEditor = true
         } catch {
+            #if DEBUG
             print("Error saving layout: \(error.localizedDescription)")
+            #endif
         }
     }
 }

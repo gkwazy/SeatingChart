@@ -2,9 +2,10 @@
 //  TestDataGenerator.swift
 //  SeatingChart
 //
-//  Created by Claude
+//  Created by GKWazy Software
 //
 
+#if DEBUG
 import Foundation
 import CoreData
 import UIKit
@@ -168,3 +169,4 @@ struct TestDataGenerator {
         }
     }
 }
+#endif

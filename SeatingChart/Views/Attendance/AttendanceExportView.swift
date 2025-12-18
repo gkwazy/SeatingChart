@@ -80,7 +80,9 @@ struct AttendanceExportView: View {
         ]
 
         guard let records = try? viewContext.fetch(request) else {
+            #if DEBUG
             print("Failed to fetch attendance records")
+            #endif
             return
         }
 
@@ -102,7 +104,9 @@ struct AttendanceExportView: View {
             csvURL = path
             showingShareSheet = true
         } catch {
+            #if DEBUG
             print("Error saving CSV: \(error.localizedDescription)")
+            #endif
         }
     }
 
