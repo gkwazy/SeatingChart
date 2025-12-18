@@ -36,7 +36,8 @@ struct SettingsView: View {
             // Data Management Section - Phase 2
             // Export/Import features coming in future update
 
-            // Developer/Testing Section
+            #if DEBUG
+            // Developer/Testing Section - Only visible in debug builds
             Section(header: Text("Testing & Demo"), footer: Text("Generate sample data for testing and demonstration purposes.")) {
                 Button(action: { showingTestDataAlert = true }) {
                     Label("Generate Test Math Class", systemImage: "flask.fill")
@@ -53,6 +54,7 @@ struct SettingsView: View {
                         .foregroundColor(.red)
                 }
             }
+            #endif
 
             // Preferences Section
             Section(header: Text("Preferences")) {
@@ -88,6 +90,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showingAbout) {
             AboutView()
         }
+        #if DEBUG
         .alert("Generate Test Data", isPresented: $showingTestDataAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Generate") {
@@ -96,9 +99,10 @@ struct SettingsView: View {
         } message: {
             Text("This will create a Math class with 20 students, each with a colorful profile picture.")
         }
+        #endif
     }
 
-
+    #if DEBUG
     // MARK: - Test Data Functions
 
     private func generateTestMathClass() {
@@ -112,6 +116,7 @@ struct SettingsView: View {
     private func deleteMathClass() {
         TestDataGenerator.deleteMathClass(context: viewContext)
     }
+    #endif
 }
 
 struct NotificationSettingsView: View {
