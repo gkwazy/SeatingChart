@@ -109,8 +109,8 @@ struct Theme {
         static var slate: Color {
             Color(UIColor { traits in
                 traits.userInterfaceStyle == .dark
-                    ? UIColor(red: 0.70, green: 0.72, blue: 0.75, alpha: 1.0)
-                    : UIColor(red: 0.33, green: 0.37, blue: 0.41, alpha: 1.0)  // #4B5563 - Better contrast
+                    ? UIColor(red: 0.78, green: 0.80, blue: 0.82, alpha: 1.0)  // Lighter for dark mode readability
+                    : UIColor(red: 0.25, green: 0.29, blue: 0.33, alpha: 1.0)  // #404854 - Darker for better contrast
             })
         }
         static var stone: Color {
