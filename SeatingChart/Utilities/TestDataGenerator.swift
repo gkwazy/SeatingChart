@@ -5,7 +5,6 @@
 //  Created by GKWazy Software
 //
 
-#if DEBUG
 import Foundation
 import CoreData
 import UIKit
@@ -149,7 +148,7 @@ struct TestDataGenerator {
         }
     }
 
-    /// Deletes Math class entirely
+    /// Deletes Math class and all its students
     static func deleteMathClass(context: NSManagedObjectContext) {
         let fetchRequest: NSFetchRequest<ClassPeriod> = ClassPeriod.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "name == %@", "Math")
@@ -159,14 +158,21 @@ struct TestDataGenerator {
             return
         }
 
+        // Delete all students first
+        if let students = mathClass.students as? Set<Student> {
+            for student in students {
+                context.delete(student)
+            }
+            print("🗑️ Removed \(students.count) students from Math class")
+        }
+
         context.delete(mathClass)
 
         do {
             try context.save()
-            print("🗑️ Deleted Math class")
+            print("🗑️ Deleted Math class and all its students")
         } catch {
             print("❌ Error deleting class: \(error.localizedDescription)")
         }
     }
 }
-#endif
